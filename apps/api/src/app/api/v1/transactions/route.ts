@@ -11,6 +11,7 @@ import {
   dispatchTransactionFlagged,
   dispatchTransactionTtrRequired,
 } from '@/lib/webhooks/dispatcher';
+import { convertCurrency } from '@/lib/utils/currency';
 
 interface TransactionCreateBody {
   customerId: string;
@@ -142,6 +143,20 @@ export async function POST(request: NextRequest) {
       const requiresTtr = compliance.requiresTTR;
       let ttrReference: string | null = null;
 
+      // Currency conversion to local currency
+      const transactionCurrency = body.currency || config.currency;
+      let amountLocal = body.amount;
+
+      if (transactionCurrency !== config.currency) {
+        try {
+          amountLocal = convertCurrency(body.amount, transactionCurrency, config.currency);
+        } catch (error) {
+          console.error('Currency conversion error:', error);
+          // Fall back to original amount if conversion fails
+          amountLocal = body.amount;
+        }
+      }
+
       // Create transaction
       const { data: transaction, error: txError } = await supabase
         .from('transactions')
@@ -150,8 +165,8 @@ export async function POST(request: NextRequest) {
           customer_id: customer.id,
           external_id: body.externalId,
           amount: body.amount,
-          currency: body.currency || config.currency,
-          amount_local: body.amount, // TODO: currency conversion
+          currency: transactionCurrency,
+          amount_local: amountLocal,
           direction: body.direction,
           transaction_type: body.type,
           description: body.description,

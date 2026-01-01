@@ -11,6 +11,32 @@ interface WebhookListResponse {
   totalCount: number;
 }
 
+export interface WebhookEvent {
+  id: string;
+  object: 'webhook_event';
+  type: string;
+  entityType?: string;
+  entityId?: string;
+  description?: string;
+  metadata?: Record<string, unknown>;
+  createdAt: string;
+}
+
+export interface WebhookEventListParams {
+  limit?: number;
+  offset?: number;
+  type?: string;
+  startDate?: string;
+  endDate?: string;
+}
+
+export interface WebhookEventListResponse {
+  object: 'list';
+  data: WebhookEvent[];
+  hasMore: boolean;
+  totalCount: number;
+}
+
 export class WebhooksResource {
   constructor(private readonly http: HttpClient) {}
 
@@ -32,5 +58,9 @@ export class WebhooksResource {
 
   async list(): Promise<WebhookListResponse> {
     return this.http.get<WebhookListResponse>('/webhooks');
+  }
+
+  async listEvents(params?: WebhookEventListParams): Promise<WebhookEventListResponse> {
+    return this.http.get<WebhookEventListResponse>('/webhooks/events', params);
   }
 }

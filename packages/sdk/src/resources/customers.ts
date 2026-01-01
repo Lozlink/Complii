@@ -8,6 +8,30 @@ import type {
   CustomerBatchResponse,
 } from '../types/customers';
 
+export interface CustomerBatchUpdateItem {
+  id: string;
+  firstName?: string;
+  middleName?: string;
+  lastName?: string;
+  email?: string;
+  phone?: string;
+  dateOfBirth?: string;
+  residentialAddress?: Record<string, unknown>;
+  isPep?: boolean;
+  metadata?: Record<string, unknown>;
+}
+
+export interface CustomerBatchUpdateResponse {
+  object: 'batch_update_result';
+  updated: string[];
+  failed: Array<{ id: string; error: string }>;
+  summary: {
+    total: number;
+    succeeded: number;
+    failed: number;
+  };
+}
+
 export class CustomersResource {
   constructor(private readonly http: HttpClient) {}
 
@@ -17,6 +41,10 @@ export class CustomersResource {
 
   async createBatch(customers: CustomerCreateInput[]): Promise<CustomerBatchResponse> {
     return this.http.post<CustomerBatchResponse>('/customers/batch', { customers });
+  }
+
+  async updateBatch(customers: CustomerBatchUpdateItem[]): Promise<CustomerBatchUpdateResponse> {
+    return this.http.post<CustomerBatchUpdateResponse>('/customers/batch-update', { customers });
   }
 
   async retrieve(id: string): Promise<Customer> {
