@@ -10,7 +10,6 @@
     "check-types": "tsc --noEmit"
   },
   "dependencies": {
-    "@dotenvx/dotenvx": "^1.51.4",
     "next": "^16.1.1",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
