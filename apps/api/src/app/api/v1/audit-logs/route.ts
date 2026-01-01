@@ -1,28 +1,28 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getServiceClient } from '@/lib/db/client';
-import type { AuthenticatedRequest } from '@/lib/auth/middleware';
+import { withAuth, AuthenticatedRequest } from '@/lib/auth/middleware';
 
 // GET /v1/audit-logs - List audit logs
 export async function GET(request: NextRequest) {
-  const req = request as AuthenticatedRequest;
-  const { tenant } = req;
-  const supabase = getServiceClient();
+  return withAuth(request, async (req: AuthenticatedRequest) => {
+    const { tenant } = req;
+    const supabase = getServiceClient();
 
-  const { searchParams } = new URL(request.url);
-  const limit = Math.min(parseInt(searchParams.get('limit') || '100'), 1000);
-  const offset = parseInt(searchParams.get('offset') || '0');
-  const entityType = searchParams.get('entityType');
-  const entityId = searchParams.get('entityId');
-  const actionType = searchParams.get('actionType');
-  const startDate = searchParams.get('startDate');
-  const endDate = searchParams.get('endDate');
+    const { searchParams } = new URL(req.url);
+    const limit = Math.min(parseInt(searchParams.get('limit') || '100'), 1000);
+    const offset = parseInt(searchParams.get('offset') || '0');
+    const entityType = searchParams.get('entityType');
+    const entityId = searchParams.get('entityId');
+    const actionType = searchParams.get('actionType');
+    const startDate = searchParams.get('startDate');
+    const endDate = searchParams.get('endDate');
 
-  try {
-    let query = supabase
-      .from('audit_logs')
-      .select('*', { count: 'exact' })
-      .eq('tenant_id', tenant.tenantId)
-      .order('created_at', { ascending: false });
+    try {
+      let query = supabase
+        .from('audit_logs')
+        .select('*', { count: 'exact' })
+        .eq('tenant_id', tenant.tenantId)
+        .order('created_at', { ascending: false });
 
     // Apply filters
     if (entityType) {
@@ -72,11 +72,12 @@ export async function GET(request: NextRequest) {
       hasMore: offset + limit < (count || 0),
       totalCount: count,
     });
-  } catch (error) {
-    console.error('Audit logs error:', error);
-    return NextResponse.json(
-      { error: 'Internal server error' },
-      { status: 500 }
-    );
-  }
+    } catch (error) {
+      console.error('Audit logs error:', error);
+      return NextResponse.json(
+        { error: 'Internal server error' },
+        { status: 500 }
+      );
+    }
+  });
 }
