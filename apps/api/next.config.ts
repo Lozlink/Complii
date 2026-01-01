@@ -2,7 +2,7 @@ import type { NextConfig } from "next";
 //import './ngrok.config'
 
 const nextConfig: NextConfig = {
-  distDir: '../dist/apps/api',
+  distDir: '/dist/apps/api',
   /* config options here */
 };
 
