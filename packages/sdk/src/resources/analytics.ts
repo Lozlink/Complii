@@ -3,6 +3,7 @@ import type { HttpClient } from '../utils/http';
 export interface AnalyticsOverviewParams {
   startDate?: string;
   endDate?: string;
+  [key: string]: string | undefined;
 }
 
 export interface AnalyticsOverview {

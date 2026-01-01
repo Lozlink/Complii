@@ -4,6 +4,7 @@ export interface TTRReportParams {
   startDate?: string;
   endDate?: string;
   format?: 'json' | 'csv' | 'download';
+  [key: string]: string | undefined;
 }
 
 export interface TTRReport {
