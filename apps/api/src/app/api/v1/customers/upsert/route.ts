@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getServiceClient } from '@/lib/supabase/service-client';
-import type { AuthenticatedRequest } from '@/lib/middleware/auth';
+import { getServiceClient } from '@/lib/db/client';
+import type { AuthenticatedRequest } from '@/lib/auth/types';
 
 export const runtime = 'nodejs';
 
