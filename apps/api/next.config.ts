@@ -1,5 +1,5 @@
 import type { NextConfig } from "next";
-import './ngrok.config'
+//import './ngrok.config'
 
 const nextConfig: NextConfig = {
   /* config options here */
