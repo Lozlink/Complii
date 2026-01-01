@@ -7,7 +7,7 @@ import {
 } from '@/lib/kyc';
 import { dispatchKycStatusChanged } from '@/lib/webhooks/dispatcher';
 
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!);
+const stripe = new Stripe(process.env.STRIPE_SECRET_KEY || 'sk_test_placeholder');
 
 // POST /v1/webhooks/stripe/identity - Stripe Identity webhook handler
 export async function POST(request: NextRequest) {

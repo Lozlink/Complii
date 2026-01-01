@@ -2,7 +2,8 @@
 export * from './types';
 
 // Providers
-export { createProvider, KycProvider, KycProviderConfig } from './providers';
+export { createProvider } from './providers';
+export type { KycProvider, KycProviderConfig } from './providers';
 export { StripeIdentityProvider } from './providers/stripe-identity';
 export { ManualVerificationProvider } from './providers/manual';
 

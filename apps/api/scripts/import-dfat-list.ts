@@ -103,13 +103,15 @@ async function parseXLSX(buffer: Buffer): Promise<SanctionedEntity[]> {
       console.log(`Processing sheet: ${sheetName}`);
 
       const sheet = workbook.Sheets[sheetName];
-      const data: any[] = XLSX.utils.sheet_to_json(sheet);
+      const data: Record<string, string | number | undefined>[] = XLSX.utils.sheet_to_json(sheet);
 
       console.log(`Found ${data.length} rows in ${sheetName}`);
 
       for (const row of data) {
-        const name = row['Name of Individual or Entity'] || '';
-        const type = row['Type'] || '';
+        const nameValue = row['Name of Individual or Entity'];
+        const name = String(nameValue || '');
+        const typeValue = row['Type'];
+        const type = String(typeValue || '');
 
         if (!name || name.trim() === '') continue;
 
@@ -119,18 +121,18 @@ async function parseXLSX(buffer: Buffer): Promise<SanctionedEntity[]> {
           : 'entity';
 
         const aliases: string[] = [];
-        const aliasStrength = row['Alias Strength'] || '';
+        const aliasStrength = row['Alias Strength'];
         if (aliasStrength) {
           aliases.push(name);
         }
 
-        const dob = row['Date of Birth'] || '';
-        const citizenship = row['Citizenship'] || '';
-        const reference = row['Reference'] || '';
-        const listingInfo = row['Listing Information'] || '';
-        const additionalInfo = row['Additional Information'] || '';
-        const committees = row['Committees'] || '';
-        const designation = row['Instrument of Designation'] || '';
+        const dob = row['Date of Birth'];
+        const citizenship = String(row['Citizenship'] || '');
+        const reference = String(row['Reference'] || '');
+        const listingInfo = String(row['Listing Information'] || '');
+        const additionalInfo = String(row['Additional Information'] || '');
+        const committees = String(row['Committees'] || '');
+        const designation = String(row['Instrument of Designation'] || '');
 
         const fullListingInfo = [
           listingInfo,
@@ -182,7 +184,7 @@ function consolidateAliases(entities: SanctionedEntity[]): SanctionedEntity[] {
   return Array.from(grouped.values());
 }
 
-function formatDate(dateValue: any): string | undefined {
+function formatDate(dateValue: string | number | undefined): string | undefined {
   if (!dateValue) return undefined;
 
   try {
@@ -197,7 +199,7 @@ function formatDate(dateValue: any): string | undefined {
         return parsed.toISOString().split('T')[0];
       }
     }
-  } catch (error) {
+  } catch {
     console.log(`Could not parse date: ${dateValue}`);
   }
 
