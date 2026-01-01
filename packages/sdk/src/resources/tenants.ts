@@ -45,6 +45,7 @@ export interface TenantListParams {
   limit?: number;
   offset?: number;
   status?: string;
+  [key: string]: string | number | undefined;
 }
 
 export interface TenantListResponse {

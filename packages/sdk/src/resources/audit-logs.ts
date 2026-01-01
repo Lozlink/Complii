@@ -22,6 +22,7 @@ export interface AuditLogListParams {
   actionType?: string;
   startDate?: string;
   endDate?: string;
+  [key: string]: string | number | undefined;
 }
 
 export interface AuditLogListResponse {
