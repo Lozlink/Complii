@@ -62,4 +62,8 @@ export class CustomersResource {
   async list(params?: CustomerListParams): Promise<PaginatedResponse<Customer>> {
     return this.http.get<PaginatedResponse<Customer>>('/customers', params);
   }
+
+  async upsert(input: CustomerCreateInput & { externalId: string }): Promise<Customer & { upserted: 'created' | 'updated' }> {
+    return this.http.post('/customers/upsert', input);
+  }
 }
