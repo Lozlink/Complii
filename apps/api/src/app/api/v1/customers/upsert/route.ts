@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getServiceClient } from '@/lib/db/client';
-import type { AuthenticatedRequest } from '@/lib/auth/types';
+import type { AuthenticatedRequest } from '@/lib/auth/middleware';
 
 export const runtime = 'nodejs';
 
