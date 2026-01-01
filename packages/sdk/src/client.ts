@@ -4,6 +4,11 @@ import { TransactionsResource } from './resources/transactions';
 import { RiskResource } from './resources/risk';
 import { WebhooksResource } from './resources/webhooks';
 import { KycResource } from './resources/kyc';
+import { AuditLogsResource } from './resources/audit-logs';
+import { TenantsResource } from './resources/tenants';
+import { PepResource } from './resources/pep';
+import { AnalyticsResource } from './resources/analytics';
+import { ReportsResource } from './resources/reports';
 import { HttpClient } from './utils/http';
 import type { CompliiConfig } from './types';
 
@@ -16,6 +21,11 @@ export class Complii {
   public readonly risk: RiskResource;
   public readonly webhooks: WebhooksResource;
   public readonly kyc: KycResource;
+  public readonly auditLogs: AuditLogsResource;
+  public readonly tenants: TenantsResource;
+  public readonly pep: PepResource;
+  public readonly analytics: AnalyticsResource;
+  public readonly reports: ReportsResource;
 
   constructor(config: CompliiConfig) {
     if (!config.apiKey) {
@@ -40,6 +50,11 @@ export class Complii {
     this.risk = new RiskResource(this.httpClient);
     this.webhooks = new WebhooksResource(this.httpClient);
     this.kyc = new KycResource(this.httpClient);
+    this.auditLogs = new AuditLogsResource(this.httpClient);
+    this.tenants = new TenantsResource(this.httpClient);
+    this.pep = new PepResource(this.httpClient);
+    this.analytics = new AnalyticsResource(this.httpClient);
+    this.reports = new ReportsResource(this.httpClient);
   }
 }
 

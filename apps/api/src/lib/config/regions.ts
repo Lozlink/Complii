@@ -235,7 +235,7 @@ export function getTenantConfig(
   tenantSettings: Record<string, unknown> = {}
 ): RegionalConfig {
   const regionalDefaults = REGIONAL_CONFIGS[region] || REGIONAL_CONFIGS.AU;
-  return deepMerge(regionalDefaults, tenantSettings);
+  return deepMerge(regionalDefaults as unknown as Record<string, unknown>, tenantSettings) as unknown as RegionalConfig;
 }
 
 export function getDefaultRegion(): string {

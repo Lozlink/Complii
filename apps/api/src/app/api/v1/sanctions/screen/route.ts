@@ -32,8 +32,10 @@ export async function POST(request: NextRequest) {
       const supabase = getServiceClient();
 
       // Get screening configuration
+      const settings = tenant.settings as Record<string, unknown> | undefined;
+      const screeningSettings = settings?.screening as { minimumMatchScore?: number } | undefined;
       const screeningConfig = {
-        minimumMatchScore: (tenant.settings as Record<string, unknown>)?.screening?.minimumMatchScore as number || 0.7,
+        minimumMatchScore: screeningSettings?.minimumMatchScore || 0.7,
         sources: config.screeningSources,
       };
 
