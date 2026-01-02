@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
-import { Search, Shield, AlertTriangle, CheckCircle, RefreshCw } from 'lucide-react';
+import { Search, Shield, AlertTriangle, CheckCircle, RefreshCw, AlertCircle } from 'lucide-react';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 
 interface ScreeningResult {
@@ -22,55 +22,10 @@ interface ScreeningResult {
   screenedAt: string;
 }
 
-// Fallback mock data
-const mockScreeningHistory: ScreeningResult[] = [
-  {
-    id: 'scr_demo_1',
-    name: 'John Smith',
-    dateOfBirth: '1985-06-15',
-    country: 'Australia',
-    isMatch: false,
-    matchScore: 0,
-    status: 'clear',
-    screeningSources: ['DFAT', 'UN'],
-    screenedAt: '2025-12-20T10:30:00Z',
-  },
-  {
-    id: 'scr_demo_2',
-    name: 'Vladimir Petrov',
-    dateOfBirth: '1970-03-22',
-    country: 'Russia',
-    isMatch: true,
-    matchScore: 85,
-    status: 'potential_match',
-    matchedEntities: [
-      {
-        name: 'Vladimir PETROV',
-        source: 'DFAT',
-        matchScore: 85,
-        aliases: ['V. Petrov'],
-      },
-    ],
-    screeningSources: ['DFAT', 'UN'],
-    screenedAt: '2025-12-21T14:15:00Z',
-  },
-  {
-    id: 'scr_demo_3',
-    name: 'Sarah Johnson',
-    dateOfBirth: '1992-11-08',
-    country: 'United States',
-    isMatch: false,
-    matchScore: 0,
-    status: 'clear',
-    screeningSources: ['DFAT', 'UN'],
-    screenedAt: '2025-12-22T09:45:00Z',
-  },
-];
-
 export default function SanctionsPage() {
   const [screeningHistory, setScreeningHistory] = useState<ScreeningResult[]>([]);
   const [loading, setLoading] = useState(true);
-  const [usingMockData, setUsingMockData] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const [screening, setScreening] = useState(false);
 
   const [screeningName, setScreeningName] = useState('');
@@ -79,14 +34,30 @@ export default function SanctionsPage() {
 
   const fetchScreeningHistory = useCallback(async () => {
     setLoading(true);
+    setError(null);
     try {
-      // Note: There's no direct screening history endpoint, so we use mock data
-      // In production, you'd have a screening history endpoint
-      setScreeningHistory(mockScreeningHistory);
-      setUsingMockData(true);
+      const response = await fetch('/api/proxy/sanctions/history?limit=50');
+      if (!response.ok) throw new Error('API unavailable');
+      const data = await response.json();
+
+      // Transform API response to match component format
+      const history = (data.data || []).map((s: Record<string, unknown>) => ({
+        id: s.id,
+        name: s.screenedName || `${s.screenedFirstName} ${s.screenedLastName}`.trim(),
+        dateOfBirth: s.screenedDob,
+        country: s.screenedCountry,
+        isMatch: s.isMatch,
+        matchScore: s.matchScore || 0,
+        status: s.status || 'clear',
+        matchedEntities: s.matchedEntities || [],
+        screeningSources: s.screeningSources || ['DFAT'],
+        screenedAt: s.screenedAt,
+      }));
+
+      setScreeningHistory(history);
     } catch {
-      setScreeningHistory(mockScreeningHistory);
-      setUsingMockData(true);
+      setError('Failed to load screening history. Please try again.');
+      setScreeningHistory([]);
     } finally {
       setLoading(false);
     }
@@ -119,55 +90,24 @@ export default function SanctionsPage() {
       if (response.ok) {
         const result = await response.json();
 
-        // Add to history
-        const newScreening: ScreeningResult = {
-          id: `scr_${Date.now()}`,
-          name: screeningName,
-          dateOfBirth: screeningDOB,
-          country: screeningCountry,
-          isMatch: result.isMatch || false,
-          matchScore: result.matchScore || 0,
-          status: result.status || 'clear',
-          matchedEntities: result.matches || [],
-          screeningSources: result.sources || ['DFAT', 'UN'],
-          screenedAt: new Date().toISOString(),
-        };
-
-        setScreeningHistory([newScreening, ...screeningHistory]);
-
         // Clear form
         setScreeningName('');
         setScreeningDOB('');
         setScreeningCountry('');
 
+        // Refresh history from API
+        await fetchScreeningHistory();
+
         if (result.isMatch) {
-          alert(`⚠️ Potential match found! Match score: ${result.matchScore}%`);
+          alert(`Potential match found! Match score: ${result.matchScore}%`);
         } else {
-          alert('✓ No matches found');
+          alert('No matches found');
         }
       } else {
         throw new Error('Screening failed');
       }
     } catch {
-      alert('Screening completed (demo mode)');
-
-      // Add mock result
-      const newScreening: ScreeningResult = {
-        id: `scr_${Date.now()}`,
-        name: screeningName,
-        dateOfBirth: screeningDOB,
-        country: screeningCountry,
-        isMatch: false,
-        matchScore: 0,
-        status: 'clear',
-        screeningSources: ['DFAT', 'UN'],
-        screenedAt: new Date().toISOString(),
-      };
-
-      setScreeningHistory([newScreening, ...screeningHistory]);
-      setScreeningName('');
-      setScreeningDOB('');
-      setScreeningCountry('');
+      alert('Failed to perform screening. Please try again.');
     } finally {
       setScreening(false);
     }
@@ -363,9 +303,10 @@ export default function SanctionsPage() {
           </div>
         </CardHeader>
         <CardContent>
-          {usingMockData && (
-            <div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded-lg text-blue-800 text-sm">
-              Showing demo data. Screenings are performed against real sanctions lists via the API.
+          {error && (
+            <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg text-red-800 text-sm flex items-center">
+              <AlertCircle className="w-4 h-4 mr-2" />
+              {error}
             </div>
           )}
 

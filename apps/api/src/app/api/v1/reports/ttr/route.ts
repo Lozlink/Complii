@@ -27,6 +27,30 @@ export async function GET(request: NextRequest) {
         endDate
       );
 
+      // Save to ttr_reports table for history
+      const { error: insertError } = await supabase
+        .from('ttr_reports')
+        .insert({
+          tenant_id: tenant.tenantId,
+          report_number: reportData.reportId,
+          report_type: 'ttr',
+          period_start: reportData.reportingPeriod.start,
+          period_end: reportData.reportingPeriod.end,
+          transaction_count: reportData.summary.totalTransactions,
+          total_amount: reportData.summary.totalValue,
+          status: 'completed',
+          generated_at: new Date().toISOString(),
+          metadata: {
+            format,
+            averageValue: reportData.summary.averageValue,
+            breakdown: reportData.summary.breakdown,
+          },
+        });
+
+      if (insertError) {
+        console.error('Failed to save report history:', insertError);
+      }
+
       // Audit log
       await supabase.from('audit_logs').insert({
         tenant_id: tenant.tenantId,

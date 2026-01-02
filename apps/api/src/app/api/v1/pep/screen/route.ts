@@ -73,9 +73,49 @@ export async function POST(request: NextRequest) {
         .slice(0, 10);
 
       const isPep = matches.length > 0 && matches[0].matchScore >= 0.85;
-      const screeningId = `pep_${Math.random().toString(36).slice(2, 10)}`;
+      const topMatch = matches[0];
 
-      // Save screening result
+      // Parse customer ID if provided
+      let parsedCustomerId: string | null = null;
+      if (body.customerId) {
+        parsedCustomerId = body.customerId.startsWith('cus_')
+          ? body.customerId.slice(4)
+          : body.customerId;
+      }
+
+      // Save to pep_screenings table
+      const { data: screening, error: insertError } = await supabase
+        .from('pep_screenings')
+        .insert({
+          tenant_id: tenant.tenantId,
+          customer_id: parsedCustomerId,
+          screened_full_name: fullName,
+          screened_country: body.country || null,
+          screened_dob: body.dateOfBirth || null,
+          is_pep: isPep,
+          match_score: topMatch?.matchScore || 0,
+          matched_details: isPep && topMatch ? {
+            name: topMatch.name,
+            position: topMatch.position,
+            country: topMatch.country,
+            category: topMatch.category,
+            riskLevel: topMatch.riskLevel,
+          } : {},
+          status: isPep ? 'potential_match' : 'clear',
+          screened_at: new Date().toISOString(),
+        })
+        .select('id')
+        .single();
+
+      if (insertError) {
+        console.error('Failed to save PEP screening:', insertError);
+      }
+
+      const screeningId = screening?.id
+        ? `pep_${screening.id.slice(0, 8)}`
+        : `pep_${Math.random().toString(36).slice(2, 10)}`;
+
+      // Log audit event
       await supabase.from('audit_logs').insert({
         tenant_id: tenant.tenantId,
         action_type: 'pep_screening_completed',
@@ -92,16 +132,12 @@ export async function POST(request: NextRequest) {
       });
 
       // If customer ID provided, update customer record
-      if (body.customerId && isPep) {
-        const customerId = body.customerId.startsWith('cus_')
-          ? body.customerId.slice(4)
-          : body.customerId;
-
+      if (parsedCustomerId && isPep) {
         await supabase
           .from('customers')
           .update({ is_pep: true })
           .eq('tenant_id', tenant.tenantId)
-          .ilike('id', `${customerId}%`);
+          .ilike('id', `${parsedCustomerId}%`);
       }
 
       return NextResponse.json({

@@ -74,7 +74,6 @@ async function downloadDFATList(): Promise<Buffer> {
           console.log(`File header: ${header} (should be "PK" for XLSX)`);
 
           if (header !== 'PK') {
-            // It's probably HTML, let's check
             const preview = buffer.toString('utf8', 0, 200);
             console.log(`File preview: ${preview.substring(0, 200)}`);
             reject(new Error('Downloaded file is not a valid XLSX file (probably HTML)'));
