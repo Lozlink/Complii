@@ -21,7 +21,7 @@ const PEP_DATABASE = [
   // Add more PEP entries as needed
 ];
 
-function calculateNameSimilarity(name1: string, name2: string): number {
+export function calculateNameSimilarity(name1: string, name2: string): number {
   const n1 = name1.toLowerCase().trim();
   const n2 = name2.toLowerCase().trim();
 
