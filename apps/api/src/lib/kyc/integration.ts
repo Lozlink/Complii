@@ -2,10 +2,12 @@ import { SupabaseClient } from '@supabase/supabase-js';
 import { sanctionsScreening } from '../compliance/screening';
 import { getTenantConfig } from '../config/regions';
 import { dispatchScreeningMatch } from '../webhooks/dispatcher';
-
+import {calculateNameSimilarity} from '../../app/api/v1/pep/screen/route'
 export interface PostVerificationResult {
   sanctionsScreened: boolean;
   isSanctioned: boolean;
+  pepScreened: boolean;
+  isPep: boolean;
   screeningId?: string;
 }
 
@@ -23,6 +25,8 @@ export async function triggerPostVerificationActions(
   const result: PostVerificationResult = {
     sanctionsScreened: false,
     isSanctioned: false,
+    pepScreened: false,
+    isPep: false,
   };
 
   // Get customer details
@@ -140,6 +144,16 @@ export async function triggerPostVerificationActions(
   } catch (err) {
     console.error('Post-verification screening failed:', err);
     // Don't throw - verification was still successful
+  }
+
+  try {
+    const {data: pepScreening, error: pepError} = await supabase.functions.invoke('pep-screen', {
+      body: {firstName: customer.firstName, lastName: customer.lastName, customerId}
+    })
+    result.pepScreened = true;
+  } catch (err) {
+    console.error('Post-verification PEP screening failed:', err);
+
   }
 
   return result;
