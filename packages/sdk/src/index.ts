@@ -7,9 +7,14 @@ export type {
 } from './types/sanctions';
 export type {
   Customer,
+  CustomerAddress,
+  CustomerType,
+  BusinessStructure,
   CustomerCreateInput,
   CustomerUpdateInput,
   CustomerListParams,
+  CustomerBatchResult,
+  CustomerBatchResponse,
 } from './types/customers';
 export type {
   Transaction,
@@ -44,3 +49,58 @@ export type {
   VerificationListParams,
   DocumentListParams,
 } from './types/kyc';
+export type {
+  BeneficialOwner,
+  BeneficialOwnerCreateInput,
+  BeneficialOwnerUpdateInput,
+  BeneficialOwnerListParams,
+  BeneficialOwnerListResponse,
+  OwnershipType,
+} from './types/beneficial-owners';
+export type {
+  Case,
+  CaseTask,
+  CaseType,
+  CasePriority,
+  CaseStatus,
+  ResolutionType,
+  TaskType,
+  TaskStatus,
+  TaskResult,
+  CaseDocument,
+  CaseCreateInput,
+  CaseUpdateInput,
+  CaseTaskCreateInput,
+  CaseTaskUpdateInput,
+  CaseListParams,
+  CaseListResponse,
+  CaseTaskListResponse,
+} from './types/cases';
+export type {
+  Alert,
+  AlertRule,
+  AlertRuleType,
+  AlertSeverity,
+  AlertStatus,
+  AlertResolutionType,
+  NotificationRecipient,
+  NotificationSent,
+  AlertRuleCreateInput,
+  AlertRuleUpdateInput,
+  AlertUpdateInput,
+  AlertRuleListParams,
+  AlertListParams,
+  AlertRuleListResponse,
+  AlertListResponse,
+} from './types/alerts';
+export type {
+  RegionalConfig,
+  RegionalThresholds,
+  ReportingDeadlines,
+  OcddSettings,
+  UboSettings,
+  BusinessRegistrationSettings,
+  RegionSummary,
+  HighRiskJurisdictions,
+  ConfigResponse,
+} from './types/config';
