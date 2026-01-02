@@ -252,7 +252,8 @@ export default function KycPage() {
             <div className="space-y-4">
               {filteredVerifications.map((verification) => {
                 const badge = getStatusBadge(verification.status);
-                const BadgeIcon = badge.icon || Clock;
+                //todo fix this undefined shit
+                const BadgeIcon = Clock;
                 return (
                   <div
                     key={verification.id}
