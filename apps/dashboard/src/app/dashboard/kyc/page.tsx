@@ -313,8 +313,8 @@ export default function KycPage() {
                           </div>
                         )}
                       </div>
-
-                      {(verification.status === 'pending' || verification.status === 'requires_input') && (
+                      {verification.provider === 'manual' &&
+                        (verification.status === 'pending' || verification.status === 'requires_input') && (
                         <div className="flex flex-col space-y-2 ml-4">
                           <button
                             onClick={() => handleReview(verification.id, 'approve')}

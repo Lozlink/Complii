@@ -5,9 +5,9 @@ import { createInternalError } from '@/lib/utils/errors';
 
 function formatVerification(v: Record<string, unknown>) {
   return {
-    id: `ver_${(v.id as string).slice(0, 8)}`,
+    id: `ver_${v.id}`,
     object: 'identity_verification',
-    customerId: `cus_${(v.customer_id as string).slice(0, 8)}`,
+    customerId: `cus_${v.customer_id as string}`,
     provider: v.provider,
     status: v.status,
     verifiedData: v.verified_first_name

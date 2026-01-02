@@ -6,9 +6,9 @@ import { createProvider } from '@/lib/kyc';
 
 function formatVerification(v: Record<string, unknown>) {
   return {
-    id: `ver_${(v.id as string).slice(0, 8)}`,
+    id: `ver_${v.id}`,
     object: 'identity_verification',
-    customerId: `cus_${(v.customer_id as string).slice(0, 8)}`,
+    customerId: `cus_${v.customer_id as string}`,
     provider: v.provider,
     status: v.status,
     verifiedData: v.verified_first_name
@@ -34,10 +34,8 @@ function formatVerification(v: Record<string, unknown>) {
 }
 
 function extractVerificationId(idParam: string): string {
-  if (idParam.startsWith('ver_')) {
-    return idParam.slice(4);
-  }
-  return idParam;
+  return idParam.startsWith('ver_') ? idParam.slice(4) : idParam;
+
 }
 
 // GET /v1/identity-verifications/:id - Get verification details

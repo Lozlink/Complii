@@ -12,6 +12,7 @@ import {
   DocumentType,
 } from '@/lib/kyc';
 import {
+  dispatchKycStatusChanged,
   dispatchKycVerificationStarted,
 } from '@/lib/webhooks/dispatcher';
 
@@ -26,9 +27,9 @@ interface StartKycRequest {
 
 function formatVerification(v: Record<string, unknown>) {
   return {
-    id: `ver_${(v.id as string).slice(0, 8)}`,
+    id: `ver_${v.id}`,
     object: 'identity_verification',
-    customerId: `cus_${(v.customer_id as string).slice(0, 8)}`,
+    customerId: `cus_${v.customer_id as string}`,
     provider: v.provider,
     status: v.status,
     verifiedData: v.verified_first_name
@@ -276,6 +277,14 @@ export async function GET(
                 .update({ verification_status: 'rejected' })
                 .eq('id', customer.id);
             }
+
+            await dispatchKycStatusChanged(supabase, tenant.tenantId, {
+              verificationId: `ver_${verification.id.slice(0, 8)}`,
+              customerId: `cus_${customer.id.slice(0, 8)}`,
+              status: result.status,
+              provider: 'stripe_identity'
+            });
+
             verification.status = result.status;
             verification.verified_first_name = result.verifiedData?.firstName;
             verification.verified_last_name = result.verifiedData?.lastName;
