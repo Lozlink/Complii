@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { authenticateApiKey } from '@/lib/auth/middleware';
-import { supabaseAdmin } from '@/lib/db/client';
-import { createAuditLog } from '@/lib/utils/audit';
+import { withAuth, AuthenticatedRequest } from '@/lib/auth/middleware';
+import { getServiceClient } from '@/lib/db/client';
 
 interface RouteParams {
   params: Promise<{ id: string }>;
@@ -9,103 +8,108 @@ interface RouteParams {
 
 // GET /api/v1/alerts/:id - Get alert
 export async function GET(request: NextRequest, { params }: RouteParams) {
-  const authResult = await authenticateApiKey(request);
-  if (authResult instanceof NextResponse) {
-    return authResult;
-  }
+  return withAuth(request, async (req: AuthenticatedRequest) => {
+    try {
+      const { tenant } = req;
+      const supabase = getServiceClient();
+      const { id } = await params;
 
-  const { tenant } = authResult;
-  const { id } = await params;
+      const { data, error } = await supabase
+        .from('alerts')
+        .select('*')
+        .eq('id', id)
+        .eq('tenant_id', tenant.tenantId)
+        .single();
 
-  const { data, error } = await supabaseAdmin
-    .from('alerts')
-    .select('*')
-    .eq('id', id)
-    .eq('tenant_id', tenant.id)
-    .single();
-
-  if (error || !data) {
-    return NextResponse.json({ error: 'Alert not found' }, { status: 404 });
-  }
-
-  return NextResponse.json(transformAlert(data));
+      if (error || !data) {
+        return NextResponse.json({ error: 'Alert not found' }, { status: 404 });
+      }
+      return NextResponse.json(transformAlert(data));
+    } catch (error) {
+      console.error('Error fetching alert:', error);
+      return NextResponse.json({ error: 'Failed to find alert' }, { status: 500 });
+    }
+  });
 }
 
 // PATCH /api/v1/alerts/:id - Update alert
 export async function PATCH(request: NextRequest, { params }: RouteParams) {
-  const authResult = await authenticateApiKey(request);
-  if (authResult instanceof NextResponse) {
-    return authResult;
-  }
+  return withAuth(request, async (req: AuthenticatedRequest) => {
+    try {
+      const { tenant } = req;
+      const supabase = getServiceClient();
+      const { id } = await params;
 
-  const { tenant, apiKeyPrefix } = authResult;
-  const { id } = await params;
+      let body;
+      try {
+        body = await request.json();
+      } catch {
+        return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 });
+      }
 
-  let body;
-  try {
-    body = await request.json();
-  } catch {
-    return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 });
-  }
+      const updateData: Record<string, unknown> = {};
 
-  const updateData: Record<string, unknown> = {};
+      const fieldMappings: Record<string, string> = {
+        status: 'status',
+        assignedTo: 'assigned_to',
+        investigationNotes: 'investigation_notes',
+        resolutionType: 'resolution_type',
+        resolutionNotes: 'resolution_notes',
+        metadata: 'metadata',
+      };
 
-  const fieldMappings: Record<string, string> = {
-    status: 'status',
-    assignedTo: 'assigned_to',
-    investigationNotes: 'investigation_notes',
-    resolutionType: 'resolution_type',
-    resolutionNotes: 'resolution_notes',
-    metadata: 'metadata',
-  };
+      for (const [camelKey, snakeKey] of Object.entries(fieldMappings)) {
+        if (body[camelKey] !== undefined) {
+          updateData[snakeKey] = body[camelKey];
+        }
+      }
 
-  for (const [camelKey, snakeKey] of Object.entries(fieldMappings)) {
-    if (body[camelKey] !== undefined) {
-      updateData[snakeKey] = body[camelKey];
+      // Handle status transitions
+      if (body.status === 'acknowledged' && !body.acknowledgedAt) {
+        updateData.acknowledged_at = new Date().toISOString();
+        updateData.acknowledged_by = body.acknowledgedBy || 'api';
+      }
+      if (body.status === 'resolved' && !body.resolvedAt) {
+        updateData.resolved_at = new Date().toISOString();
+        updateData.resolved_by = body.resolvedBy || 'api';
+      }
+      if (body.assignedTo) {
+        updateData.assigned_at = new Date().toISOString();
+      }
+
+      if (Object.keys(updateData).length === 0) {
+        return NextResponse.json({ error: 'No fields to update' }, { status: 400 });
+      }
+
+      const { data, error } = await supabase
+        .from('alerts')
+        .update(updateData)
+        .eq('id', id)
+        .eq('tenant_id', tenant.tenantId)
+        .select()
+        .single();
+
+      if (error || !data) {
+        return NextResponse.json({ error: 'Alert not found' }, { status: 404 });
+      }
+
+      // Audit log
+      await supabase.from('audit_logs').insert({
+        tenant_id: tenant.tenantId,
+        action_type: 'alert.updated',
+        entity_type: 'alert',
+        entity_id: id,
+        description: `Updated alert ${data.alert_number}`,
+        metadata: { updatedFields: Object.keys(updateData) },
+        api_key_prefix: tenant.apiKeyPrefix,
+      });
+
+      return NextResponse.json(transformAlert(data));
+    } catch (error) {
+      console.error('Error updating alert:', error);
+      return NextResponse.json({ error: 'Failed to update alert' }, { status: 500 });
     }
-  }
-
-  // Handle status transitions
-  if (body.status === 'acknowledged' && !body.acknowledgedAt) {
-    updateData.acknowledged_at = new Date().toISOString();
-    updateData.acknowledged_by = body.acknowledgedBy || 'api';
-  }
-  if (body.status === 'resolved' && !body.resolvedAt) {
-    updateData.resolved_at = new Date().toISOString();
-    updateData.resolved_by = body.resolvedBy || 'api';
-  }
-  if (body.assignedTo) {
-    updateData.assigned_at = new Date().toISOString();
-  }
-
-  if (Object.keys(updateData).length === 0) {
-    return NextResponse.json({ error: 'No fields to update' }, { status: 400 });
-  }
-
-  const { data, error } = await supabaseAdmin
-    .from('alerts')
-    .update(updateData)
-    .eq('id', id)
-    .eq('tenant_id', tenant.id)
-    .select()
-    .single();
-
-  if (error || !data) {
-    return NextResponse.json({ error: 'Alert not found' }, { status: 404 });
-  }
-
-  await createAuditLog(supabaseAdmin, {
-    tenantId: tenant.id,
-    actionType: 'alert.updated',
-    entityType: 'alert',
-    entityId: id,
-    description: `Updated alert ${data.alert_number}`,
-    metadata: { updatedFields: Object.keys(updateData) },
-    apiKeyPrefix,
-    request,
   });
-
-  return NextResponse.json(transformAlert(data));
 }
 
 function transformAlert(row: Record<string, unknown>) {

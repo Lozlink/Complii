@@ -1,139 +1,144 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { authenticateApiKey } from '@/lib/auth/middleware';
-import { supabaseAdmin } from '@/lib/db/client';
-import { createAuditLog } from '@/lib/utils/audit';
+import { withAuth, AuthenticatedRequest } from '@/lib/auth/middleware';
+import { getServiceClient } from '@/lib/db/client';
 
 // GET /api/v1/cases - List cases
 export async function GET(request: NextRequest) {
-  const authResult = await authenticateApiKey(request);
-  if (authResult instanceof NextResponse) {
-    return authResult;
-  }
+  return withAuth(request, async (req: AuthenticatedRequest) => {
+    try {
+      const { tenant } = req;
+      const supabase = getServiceClient();
+      const { searchParams } = new URL(request.url);
 
-  const { tenant } = authResult;
-  const { searchParams } = new URL(request.url);
+      const status = searchParams.get('status');
+      const caseType = searchParams.get('case_type');
+      const priority = searchParams.get('priority');
+      const customerId = searchParams.get('customer_id');
+      const assignedTo = searchParams.get('assigned_to');
+      const isEscalated = searchParams.get('is_escalated');
+      const limit = Math.min(parseInt(searchParams.get('limit') || '20'), 100);
+      const startingAfter = searchParams.get('starting_after');
 
-  const status = searchParams.get('status');
-  const caseType = searchParams.get('case_type');
-  const priority = searchParams.get('priority');
-  const customerId = searchParams.get('customer_id');
-  const assignedTo = searchParams.get('assigned_to');
-  const isEscalated = searchParams.get('is_escalated');
-  const limit = Math.min(parseInt(searchParams.get('limit') || '20'), 100);
-  const startingAfter = searchParams.get('starting_after');
+      let query = supabase
+        .from('cases')
+        .select('*', { count: 'exact' })
+        .eq('tenant_id', tenant.tenantId)
+        .order('created_at', { ascending: false })
+        .limit(limit);
 
-  let query = supabaseAdmin
-    .from('cases')
-    .select('*', { count: 'exact' })
-    .eq('tenant_id', tenant.id)
-    .order('created_at', { ascending: false })
-    .limit(limit);
+      if (status) query = query.eq('status', status);
+      if (caseType) query = query.eq('case_type', caseType);
+      if (priority) query = query.eq('priority', priority);
+      if (customerId) query = query.eq('customer_id', customerId);
+      if (assignedTo) query = query.eq('assigned_to', assignedTo);
+      if (isEscalated !== null) query = query.eq('is_escalated', isEscalated === 'true');
+      if (startingAfter) query = query.lt('id', startingAfter);
 
-  if (status) query = query.eq('status', status);
-  if (caseType) query = query.eq('case_type', caseType);
-  if (priority) query = query.eq('priority', priority);
-  if (customerId) query = query.eq('customer_id', customerId);
-  if (assignedTo) query = query.eq('assigned_to', assignedTo);
-  if (isEscalated !== null) query = query.eq('is_escalated', isEscalated === 'true');
-  if (startingAfter) query = query.lt('id', startingAfter);
+      const { data, error, count } = await query;
 
-  const { data, error, count } = await query;
+      if (error) {
+        return NextResponse.json({ error: error.message }, { status: 500 });
+      }
 
-  if (error) {
-    return NextResponse.json({ error: error.message }, { status: 500 });
-  }
-
-  return NextResponse.json({
-    object: 'list',
-    data: data?.map(transformCase) || [],
-    hasMore: (count || 0) > limit,
-    totalCount: count || 0,
+      return NextResponse.json({
+        object: 'list',
+        data: data?.map(transformCase) || [],
+        hasMore: (count || 0) > limit,
+        totalCount: count || 0,
+      });
+    } catch (error) {
+      console.error('Error fetching cases:', error);
+      return NextResponse.json({ error: 'Failed to list cases' }, { status: 500 });
+    }
   });
 }
 
 // POST /api/v1/cases - Create case
 export async function POST(request: NextRequest) {
-  const authResult = await authenticateApiKey(request);
-  if (authResult instanceof NextResponse) {
-    return authResult;
-  }
+  return withAuth(request, async (req: AuthenticatedRequest) => {
+    try {
+      const { tenant } = req;
+      const supabase = getServiceClient();
 
-  const { tenant, apiKeyPrefix } = authResult;
+      let body;
+      try {
+        body = await req.json();
+      } catch {
+        return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 });
+      }
 
-  let body;
-  try {
-    body = await request.json();
-  } catch {
-    return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 });
-  }
+      const {
+        title,
+        description,
+        caseType,
+        priority = 'medium',
+        customerId,
+        transactionIds,
+        assignedTo,
+        department,
+        dueDate,
+        tags,
+        metadata,
+      } = body;
 
-  const {
-    title,
-    description,
-    caseType,
-    priority = 'medium',
-    customerId,
-    transactionIds,
-    assignedTo,
-    department,
-    dueDate,
-    tags,
-    metadata,
-  } = body;
+      if (!title || !caseType) {
+        return NextResponse.json(
+          { error: 'title and caseType are required' },
+          { status: 400 }
+        );
+      }
 
-  if (!title || !caseType) {
-    return NextResponse.json(
-      { error: 'title and caseType are required' },
-      { status: 400 }
-    );
-  }
+      // Generate case number
+      const year = new Date().getFullYear();
+      const { count } = await supabase
+        .from('cases')
+        .select('*', { count: 'exact', head: true })
+        .eq('tenant_id', tenant.tenantId)
+        .gte('created_at', `${year}-01-01`);
 
-  // Generate case number
-  const year = new Date().getFullYear();
-  const { count } = await supabaseAdmin
-    .from('cases')
-    .select('*', { count: 'exact', head: true })
-    .eq('tenant_id', tenant.id)
-    .gte('created_at', `${year}-01-01`);
+      const caseNumber = `CASE-${year}-${String((count || 0) + 1).padStart(6, '0')}`;
 
-  const caseNumber = `CASE-${year}-${String((count || 0) + 1).padStart(6, '0')}`;
+      const { data, error } = await supabase
+        .from('cases')
+        .insert({
+          tenant_id: tenant.tenantId,
+          case_number: caseNumber,
+          title,
+          description,
+          case_type: caseType,
+          priority,
+          customer_id: customerId,
+          transaction_ids: transactionIds || [],
+          assigned_to: assignedTo,
+          assigned_at: assignedTo ? new Date().toISOString() : null,
+          department,
+          due_date: dueDate,
+          tags: tags || [],
+          metadata: metadata || {},
+        })
+        .select()
+        .single();
 
-  const { data, error } = await supabaseAdmin
-    .from('cases')
-    .insert({
-      tenant_id: tenant.id,
-      case_number: caseNumber,
-      title,
-      description,
-      case_type: caseType,
-      priority,
-      customer_id: customerId,
-      transaction_ids: transactionIds || [],
-      assigned_to: assignedTo,
-      assigned_at: assignedTo ? new Date().toISOString() : null,
-      department,
-      due_date: dueDate,
-      tags: tags || [],
-      metadata: metadata || {},
-    })
-    .select()
-    .single();
+      if (error) {
+        return NextResponse.json({ error: error.message }, { status: 500 });
+      }
 
-  if (error) {
-    return NextResponse.json({ error: error.message }, { status: 500 });
-  }
+      // Audit log
+      await supabase.from('audit_logs').insert({
+        tenant_id: tenant.tenantId,
+        action_type: 'case.created',
+        entity_type: 'case',
+        entity_id: data.id,
+        description: `Created case ${caseNumber}: ${title}`,
+        api_key_prefix: tenant.apiKeyPrefix,
+      });
 
-  await createAuditLog(supabaseAdmin, {
-    tenantId: tenant.id,
-    actionType: 'case.created',
-    entityType: 'case',
-    entityId: data.id,
-    description: `Created case ${caseNumber}: ${title}`,
-    apiKeyPrefix,
-    request,
+      return NextResponse.json(transformCase(data), { status: 201 });
+    } catch (error) {
+      console.error('Case create error:', error);
+      return NextResponse.json({ error: 'Failed to create case' }, { status: 500 });
+    }
   });
-
-  return NextResponse.json(transformCase(data), { status: 201 });
 }
 
 function transformCase(row: Record<string, unknown>) {

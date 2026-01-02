@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { authenticateApiKey } from '@/lib/auth/middleware';
-import { supabaseAdmin } from '@/lib/db/client';
-import { createAuditLog } from '@/lib/utils/audit';
+import { withAuth, AuthenticatedRequest } from '@/lib/auth/middleware';
+import { getServiceClient } from '@/lib/db/client';
 
 interface RouteParams {
   params: Promise<{ id: string }>;
@@ -9,147 +8,156 @@ interface RouteParams {
 
 // GET /api/v1/cases/:id - Get case
 export async function GET(request: NextRequest, { params }: RouteParams) {
-  const authResult = await authenticateApiKey(request);
-  if (authResult instanceof NextResponse) {
-    return authResult;
-  }
+  return withAuth(request, async (req: AuthenticatedRequest) => {
+    try {
+      const { tenant } = req;
+      const supabase = getServiceClient();
+      const { id } = await params;
 
-  const { tenant } = authResult;
-  const { id } = await params;
+      const { data, error } = await supabase
+        .from('cases')
+        .select('*')
+        .eq('id', id)
+        .eq('tenant_id', tenant.tenantId)
+        .single();
 
-  const { data, error } = await supabaseAdmin
-    .from('cases')
-    .select('*')
-    .eq('id', id)
-    .eq('tenant_id', tenant.id)
-    .single();
+      if (error || !data) {
+        return NextResponse.json({ error: 'Case not found' }, { status: 404 });
+      }
 
-  if (error || !data) {
-    return NextResponse.json({ error: 'Case not found' }, { status: 404 });
-  }
-
-  return NextResponse.json(transformCase(data));
+      return NextResponse.json(transformCase(data));
+    } catch (error) {
+      console.error('Error fetching case:', error);
+      return NextResponse.json({ error: 'Failed to find case' }, { status: 500 });
+    }
+  });
 }
 
 // PATCH /api/v1/cases/:id - Update case
 export async function PATCH(request: NextRequest, { params }: RouteParams) {
-  const authResult = await authenticateApiKey(request);
-  if (authResult instanceof NextResponse) {
-    return authResult;
-  }
+  return withAuth(request, async (req: AuthenticatedRequest) => {
+    try {
+      const { tenant } = req;
+      const supabase = getServiceClient();
+      const { id } = await params;
 
-  const { tenant, apiKeyPrefix } = authResult;
-  const { id } = await params;
+      let body;
+      try {
+        body = await request.json();
+      } catch {
+        return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 });
+      }
 
-  let body;
-  try {
-    body = await request.json();
-  } catch {
-    return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 });
-  }
+      const updateData: Record<string, unknown> = {};
 
-  const updateData: Record<string, unknown> = {};
+      const fieldMappings: Record<string, string> = {
+        title: 'title',
+        description: 'description',
+        priority: 'priority',
+        status: 'status',
+        assignedTo: 'assigned_to',
+        department: 'department',
+        dueDate: 'due_date',
+        resolutionType: 'resolution_type',
+        resolutionSummary: 'resolution_summary',
+        resolutionNotes: 'resolution_notes',
+        tags: 'tags',
+        metadata: 'metadata',
+      };
 
-  const fieldMappings: Record<string, string> = {
-    title: 'title',
-    description: 'description',
-    priority: 'priority',
-    status: 'status',
-    assignedTo: 'assigned_to',
-    department: 'department',
-    dueDate: 'due_date',
-    resolutionType: 'resolution_type',
-    resolutionSummary: 'resolution_summary',
-    resolutionNotes: 'resolution_notes',
-    tags: 'tags',
-    metadata: 'metadata',
-  };
+      for (const [camelKey, snakeKey] of Object.entries(fieldMappings)) {
+        if (body[camelKey] !== undefined) {
+          updateData[snakeKey] = body[camelKey];
+        }
+      }
 
-  for (const [camelKey, snakeKey] of Object.entries(fieldMappings)) {
-    if (body[camelKey] !== undefined) {
-      updateData[snakeKey] = body[camelKey];
+      // Handle status transitions
+      if (body.status === 'resolved' && !body.resolvedAt) {
+        updateData.resolved_at = new Date().toISOString();
+      }
+      if (body.status === 'closed' && !body.closedAt) {
+        updateData.closed_at = new Date().toISOString();
+      }
+      if (body.assignedTo && body.assignedTo !== undefined) {
+        updateData.assigned_at = new Date().toISOString();
+      }
+
+      if (Object.keys(updateData).length === 0) {
+        return NextResponse.json({ error: 'No fields to update' }, { status: 400 });
+      }
+
+      const { data, error } = await supabase
+        .from('cases')
+        .update(updateData)
+        .eq('id', id)
+        .eq('tenant_id', tenant.tenantId)
+        .select()
+        .single();
+
+      if (error || !data) {
+        return NextResponse.json({ error: 'Case not found' }, { status: 404 });
+      }
+
+      // Audit log
+      await supabase.from('audit_logs').insert({
+        tenant_id: tenant.tenantId,
+        action_type: 'case.updated',
+        entity_type: 'case',
+        entity_id: id,
+        description: `Updated case ${data.case_number}`,
+        metadata: { updatedFields: Object.keys(updateData) },
+        api_key_prefix: tenant.apiKeyPrefix,
+      });
+
+      return NextResponse.json(transformCase(data));
+    } catch (error) {
+      console.error('Error updating case:', error);
+      return NextResponse.json({ error: 'Failed to update case' }, { status: 500 });
     }
-  }
-
-  // Handle status transitions
-  if (body.status === 'resolved' && !body.resolvedAt) {
-    updateData.resolved_at = new Date().toISOString();
-  }
-  if (body.status === 'closed' && !body.closedAt) {
-    updateData.closed_at = new Date().toISOString();
-  }
-  if (body.assignedTo && body.assignedTo !== undefined) {
-    updateData.assigned_at = new Date().toISOString();
-  }
-
-  if (Object.keys(updateData).length === 0) {
-    return NextResponse.json({ error: 'No fields to update' }, { status: 400 });
-  }
-
-  const { data, error } = await supabaseAdmin
-    .from('cases')
-    .update(updateData)
-    .eq('id', id)
-    .eq('tenant_id', tenant.id)
-    .select()
-    .single();
-
-  if (error || !data) {
-    return NextResponse.json({ error: 'Case not found' }, { status: 404 });
-  }
-
-  await createAuditLog(supabaseAdmin, {
-    tenantId: tenant.id,
-    actionType: 'case.updated',
-    entityType: 'case',
-    entityId: id,
-    description: `Updated case ${data.case_number}`,
-    metadata: { updatedFields: Object.keys(updateData) },
-    apiKeyPrefix,
-    request,
   });
-
-  return NextResponse.json(transformCase(data));
 }
 
 // DELETE /api/v1/cases/:id - Delete case (soft delete by closing)
 export async function DELETE(request: NextRequest, { params }: RouteParams) {
-  const authResult = await authenticateApiKey(request);
-  if (authResult instanceof NextResponse) {
-    return authResult;
-  }
+  return withAuth(request, async (req: AuthenticatedRequest) => {
+    try {
+      const { tenant } = req;
+      const supabase = getServiceClient();
+      const { id } = await params;
 
-  const { tenant, apiKeyPrefix } = authResult;
-  const { id } = await params;
+      // Soft delete by setting status to closed
+      const { data, error } = await supabase
+        .from('cases')
+        .update({
+          status: 'closed',
+          closed_at: new Date().toISOString(),
+          closure_reason: 'Deleted via API',
+        })
+        .eq('id', id)
+        .eq('tenant_id', tenant.tenantId)
+        .select()
+        .single();
 
-  // Soft delete by setting status to closed
-  const { data, error } = await supabaseAdmin
-    .from('cases')
-    .update({
-      status: 'closed',
-      closed_at: new Date().toISOString(),
-      closure_reason: 'Deleted via API',
-    })
-    .eq('id', id)
-    .eq('tenant_id', tenant.id)
-    .select()
-    .single();
+      if (error || !data) {
+        return NextResponse.json({ error: 'Case not found' }, { status: 404 });
+      }
 
-  if (error || !data) {
-    return NextResponse.json({ error: 'Case not found' }, { status: 404 });
-  }
+      // Audit log
+      await supabase.from('audit_logs').insert({
+        tenant_id: tenant.tenantId,
+        action_type: 'case.closed',
+        entity_type: 'case',
+        entity_id: id,
+        description: `Closed case ${data.case_number}`,
+        api_key_prefix: tenant.apiKeyPrefix,
+      });
 
-  await createAuditLog(supabaseAdmin, {
-    tenantId: tenant.id,
-    actionType: 'case.closed',
-    entityType: 'case',
-    entityId: id,
-    description: `Closed case ${data.case_number}`,
-    apiKeyPrefix,
-    request,
+      return NextResponse.json({ deleted: true, id });
+    } catch (error) {
+      console.error('Error deleting case:', error);
+      return NextResponse.json({ error: 'Failed to delete case' }, { status: 500 });
+    }
   });
-
-  return NextResponse.json({ deleted: true, id });
 }
 
 function transformCase(row: Record<string, unknown>) {

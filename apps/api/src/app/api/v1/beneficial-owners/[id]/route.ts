@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { authenticateApiKey } from '@/lib/auth/middleware';
-import { supabaseAdmin } from '@/lib/db/client';
-import { createAuditLog } from '@/lib/utils/audit';
+import { withAuth, AuthenticatedRequest } from '@/lib/auth/middleware';
+import { getServiceClient } from '@/lib/db/client';
 
 interface RouteParams {
   params: Promise<{ id: string }>;
@@ -9,144 +8,153 @@ interface RouteParams {
 
 // GET /api/v1/beneficial-owners/:id - Get beneficial owner
 export async function GET(request: NextRequest, { params }: RouteParams) {
-  const authResult = await authenticateApiKey(request);
-  if (authResult instanceof NextResponse) {
-    return authResult;
-  }
+  return withAuth(request, async (req: AuthenticatedRequest) => {
+    try {
+      const { tenant } = req;
+      const supabase = getServiceClient();
+      const { id } = await params;
 
-  const { tenant } = authResult;
-  const { id } = await params;
+      const { data, error } = await supabase
+        .from('beneficial_owners')
+        .select('*')
+        .eq('id', id)
+        .eq('tenant_id', tenant.tenantId)
+        .single();
 
-  const { data, error } = await supabaseAdmin
-    .from('beneficial_owners')
-    .select('*')
-    .eq('id', id)
-    .eq('tenant_id', tenant.id)
-    .single();
+      if (error || !data) {
+        return NextResponse.json({ error: 'Beneficial owner not found' }, { status: 404 });
+      }
 
-  if (error || !data) {
-    return NextResponse.json({ error: 'Beneficial owner not found' }, { status: 404 });
-  }
-
-  return NextResponse.json(transformBeneficialOwner(data));
+      return NextResponse.json(transformBeneficialOwner(data));
+    } catch (error) {
+      console.error('Error fetching beneficial owner:', error);
+      return NextResponse.json({ error: 'Failed to find beneficial owner' }, { status: 500 });
+    }
+  });
 }
 
 // PATCH /api/v1/beneficial-owners/:id - Update beneficial owner
 export async function PATCH(request: NextRequest, { params }: RouteParams) {
-  const authResult = await authenticateApiKey(request);
-  if (authResult instanceof NextResponse) {
-    return authResult;
-  }
+  return withAuth(request, async (req: AuthenticatedRequest) => {
+    try {
+      const { tenant } = req;
+      const supabase = getServiceClient();
+      const { id } = await params;
 
-  const { tenant, apiKeyPrefix } = authResult;
-  const { id } = await params;
+      let body;
+      try {
+        body = await request.json();
+      } catch {
+        return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 });
+      }
 
-  let body;
-  try {
-    body = await request.json();
-  } catch {
-    return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 });
-  }
+      const updateData: Record<string, unknown> = {};
 
-  const updateData: Record<string, unknown> = {};
+      const fieldMappings: Record<string, string> = {
+        firstName: 'first_name',
+        middleName: 'middle_name',
+        lastName: 'last_name',
+        dateOfBirth: 'date_of_birth',
+        nationality: 'nationality',
+        email: 'email',
+        phone: 'phone',
+        residentialAddress: 'residential_address',
+        ownershipPercentage: 'ownership_percentage',
+        ownershipType: 'ownership_type',
+        controlDescription: 'control_description',
+        verificationStatus: 'verification_status',
+        isActive: 'is_active',
+        ceasedDate: 'ceased_date',
+        metadata: 'metadata',
+      };
 
-  const fieldMappings: Record<string, string> = {
-    firstName: 'first_name',
-    middleName: 'middle_name',
-    lastName: 'last_name',
-    dateOfBirth: 'date_of_birth',
-    nationality: 'nationality',
-    email: 'email',
-    phone: 'phone',
-    residentialAddress: 'residential_address',
-    ownershipPercentage: 'ownership_percentage',
-    ownershipType: 'ownership_type',
-    controlDescription: 'control_description',
-    verificationStatus: 'verification_status',
-    isActive: 'is_active',
-    ceasedDate: 'ceased_date',
-    metadata: 'metadata',
-  };
+      for (const [camelKey, snakeKey] of Object.entries(fieldMappings)) {
+        if (body[camelKey] !== undefined) {
+          updateData[snakeKey] = body[camelKey];
+        }
+      }
 
-  for (const [camelKey, snakeKey] of Object.entries(fieldMappings)) {
-    if (body[camelKey] !== undefined) {
-      updateData[snakeKey] = body[camelKey];
+      if (updateData.ownership_percentage !== undefined) {
+        const pct = updateData.ownership_percentage as number;
+        if (pct <= 0 || pct > 100) {
+          return NextResponse.json(
+            { error: 'ownershipPercentage must be between 0 and 100' },
+            { status: 400 }
+          );
+        }
+      }
+
+      if (Object.keys(updateData).length === 0) {
+        return NextResponse.json({ error: 'No fields to update' }, { status: 400 });
+      }
+
+      const { data, error } = await supabase
+        .from('beneficial_owners')
+        .update(updateData)
+        .eq('id', id)
+        .eq('tenant_id', tenant.tenantId)
+        .select()
+        .single();
+
+      if (error || !data) {
+        return NextResponse.json({ error: 'Beneficial owner not found' }, { status: 404 });
+      }
+
+      // Audit log
+      await supabase.from('audit_logs').insert({
+        tenant_id: tenant.tenantId,
+        action_type: 'beneficial_owner.updated',
+        entity_type: 'beneficial_owner',
+        entity_id: id,
+        description: `Updated beneficial owner ${data.first_name} ${data.last_name}`,
+        metadata: { updatedFields: Object.keys(updateData) },
+        api_key_prefix: tenant.apiKeyPrefix,
+      });
+
+      return NextResponse.json(transformBeneficialOwner(data));
+    } catch (error) {
+      console.error('Error updating beneficial owner:', error);
+      return NextResponse.json({ error: 'Failed to update beneficial owner' }, { status: 500 });
     }
-  }
-
-  if (updateData.ownership_percentage !== undefined) {
-    const pct = updateData.ownership_percentage as number;
-    if (pct <= 0 || pct > 100) {
-      return NextResponse.json(
-        { error: 'ownershipPercentage must be between 0 and 100' },
-        { status: 400 }
-      );
-    }
-  }
-
-  if (Object.keys(updateData).length === 0) {
-    return NextResponse.json({ error: 'No fields to update' }, { status: 400 });
-  }
-
-  const { data, error } = await supabaseAdmin
-    .from('beneficial_owners')
-    .update(updateData)
-    .eq('id', id)
-    .eq('tenant_id', tenant.id)
-    .select()
-    .single();
-
-  if (error || !data) {
-    return NextResponse.json({ error: 'Beneficial owner not found' }, { status: 404 });
-  }
-
-  await createAuditLog(supabaseAdmin, {
-    tenantId: tenant.id,
-    actionType: 'beneficial_owner.updated',
-    entityType: 'beneficial_owner',
-    entityId: id,
-    description: `Updated beneficial owner ${data.first_name} ${data.last_name}`,
-    metadata: { updatedFields: Object.keys(updateData) },
-    apiKeyPrefix,
-    request,
   });
-
-  return NextResponse.json(transformBeneficialOwner(data));
 }
 
 // DELETE /api/v1/beneficial-owners/:id - Delete beneficial owner
 export async function DELETE(request: NextRequest, { params }: RouteParams) {
-  const authResult = await authenticateApiKey(request);
-  if (authResult instanceof NextResponse) {
-    return authResult;
-  }
+  return withAuth(request, async (req: AuthenticatedRequest) => {
+    try {
+      const { tenant } = req;
+      const supabase = getServiceClient();
+      const { id } = await params;
 
-  const { tenant, apiKeyPrefix } = authResult;
-  const { id } = await params;
+      const { data, error } = await supabase
+        .from('beneficial_owners')
+        .delete()
+        .eq('id', id)
+        .eq('tenant_id', tenant.tenantId)
+        .select()
+        .single();
 
-  const { data, error } = await supabaseAdmin
-    .from('beneficial_owners')
-    .delete()
-    .eq('id', id)
-    .eq('tenant_id', tenant.id)
-    .select()
-    .single();
+      if (error || !data) {
+        return NextResponse.json({ error: 'Beneficial owner not found' }, { status: 404 });
+      }
 
-  if (error || !data) {
-    return NextResponse.json({ error: 'Beneficial owner not found' }, { status: 404 });
-  }
+      // Audit log
+      await supabase.from('audit_logs').insert({
+        tenant_id: tenant.tenantId,
+        action_type: 'beneficial_owner.deleted',
+        entity_type: 'beneficial_owner',
+        entity_id: id,
+        description: `Deleted beneficial owner ${data.first_name} ${data.last_name}`,
+        api_key_prefix: tenant.apiKeyPrefix,
+      });
 
-  await createAuditLog(supabaseAdmin, {
-    tenantId: tenant.id,
-    actionType: 'beneficial_owner.deleted',
-    entityType: 'beneficial_owner',
-    entityId: id,
-    description: `Deleted beneficial owner ${data.first_name} ${data.last_name}`,
-    apiKeyPrefix,
-    request,
+      return NextResponse.json({ deleted: true, id });
+    } catch (error) {
+      console.error('Error deleting beneficial owner:', error);
+      return NextResponse.json({ error: 'Failed to delete beneficial owner' }, { status: 500 });
+    }
   });
-
-  return NextResponse.json({ deleted: true, id });
 }
 
 function transformBeneficialOwner(row: Record<string, unknown>) {
