@@ -82,7 +82,7 @@ const REGION_NAMES: Record<string, string> = {
 };
 
 // Fallback regional configurations
-const FALLBACK_CONFIGS: Record<string, RegionalConfig> = {
+const FALLBACK_CONFIGS: Record<string, RegionalConfig> & { AU: RegionalConfig } = {
   AU: {
     thresholds: {
       ttrRequired: 10000,
@@ -264,14 +264,16 @@ export default function SettingsPage() {
           setRegionalConfig(data.current_config);
           setUsingMockData(false);
         } else {
-          setRegionalConfig(FALLBACK_CONFIGS[selectedRegion] ?? FALLBACK_CONFIGS.AU);
+          const fallback = FALLBACK_CONFIGS[selectedRegion] || FALLBACK_CONFIGS.AU;
+          setRegionalConfig(fallback);
           setUsingMockData(true);
         }
       } else {
         throw new Error('API unavailable');
       }
     } catch {
-      setRegionalConfig(FALLBACK_CONFIGS[selectedRegion] ?? FALLBACK_CONFIGS.AU);
+      const fallback = FALLBACK_CONFIGS[selectedRegion] || FALLBACK_CONFIGS.AU;
+      setRegionalConfig(fallback);
       setUsingMockData(true);
     } finally {
       setLoading(false);
@@ -293,13 +295,16 @@ export default function SettingsPage() {
         if (data.config) {
           setRegionalConfig(data.config);
         } else {
-          setRegionalConfig(FALLBACK_CONFIGS[newRegion] ?? FALLBACK_CONFIGS.AU);
+          const fallback = FALLBACK_CONFIGS[newRegion] || FALLBACK_CONFIGS.AU;
+          setRegionalConfig(fallback);
         }
       } else {
-        setRegionalConfig(FALLBACK_CONFIGS[newRegion] ?? FALLBACK_CONFIGS.AU);
+        const fallback = FALLBACK_CONFIGS[newRegion] || FALLBACK_CONFIGS.AU;
+        setRegionalConfig(fallback);
       }
     } catch {
-      setRegionalConfig(FALLBACK_CONFIGS[newRegion] ?? FALLBACK_CONFIGS.AU);
+      const fallback = FALLBACK_CONFIGS[newRegion] || FALLBACK_CONFIGS.AU;
+      setRegionalConfig(fallback);
     } finally {
       setLoading(false);
     }
