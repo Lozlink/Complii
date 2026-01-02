@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
-import { UserCheck, Clock, CheckCircle, XCircle, FileText, RefreshCw } from 'lucide-react';
+import { UserCheck, Clock, CheckCircle, XCircle, FileText, RefreshCw, type LucideIcon } from 'lucide-react';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 
 interface Verification {
@@ -17,6 +17,11 @@ interface Verification {
   rejectionReason?: string;
   createdAt: string;
   updatedAt?: string;
+}
+
+interface StatusBadge {
+  class: string;
+  icon: LucideIcon;
 }
 
 // Fallback mock data
@@ -130,8 +135,8 @@ export default function KycPage() {
     rejected: verifications.filter((v) => v.status === 'rejected').length,
   };
 
-  const getStatusBadge = (status: string) => {
-    const badges: Record<string, { class: string; icon: typeof CheckCircle }> = {
+  const getStatusBadge = (status: string): StatusBadge => {
+    const badges: Record<string, StatusBadge> = {
       verified: { class: 'bg-green-100 text-green-800', icon: CheckCircle },
       pending: { class: 'bg-yellow-100 text-yellow-800', icon: Clock },
       requires_input: { class: 'bg-yellow-100 text-yellow-800', icon: Clock },
@@ -252,8 +257,7 @@ export default function KycPage() {
             <div className="space-y-4">
               {filteredVerifications.map((verification) => {
                 const badge = getStatusBadge(verification.status);
-                //todo fix this undefined shit
-                const BadgeIcon = Clock;
+                const BadgeIcon = badge.icon;
                 return (
                   <div
                     key={verification.id}

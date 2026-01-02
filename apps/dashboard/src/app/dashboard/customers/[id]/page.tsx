@@ -78,7 +78,7 @@ export default function CustomerDetailPage() {
       pending: { class: 'bg-yellow-100 text-yellow-800', icon: AlertTriangle },
       rejected: { class: 'bg-red-100 text-red-800', icon: Shield },
     };
-    return badges[status as keyof typeof badges] || badges.pending;
+    return (badges as any)[status] || badges.pending;
   };
 
   const getRiskBadge = (risk: string) => {
@@ -87,7 +87,7 @@ export default function CustomerDetailPage() {
       medium: 'bg-orange-100 text-orange-800',
       high: 'bg-red-100 text-red-800',
     };
-    return badges[risk as keyof typeof badges] || badges.low;
+    return (badges as any)[risk] || badges.low;
   };
 
   const statusBadge = getStatusBadge(customer.kycStatus);

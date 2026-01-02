@@ -130,22 +130,22 @@ export default function CustomersPage() {
   });
 
   const getStatusBadge = (status: string) => {
-    const badges: Record<string, string> = {
+    const badges = {
       verified: 'bg-green-100 text-green-800',
       pending: 'bg-yellow-100 text-yellow-800',
       rejected: 'bg-red-100 text-red-800',
       unverified: 'bg-gray-100 text-gray-800',
     };
-    return badges[status] || badges.pending;
+    return (badges as any)[status] || badges.pending;
   };
 
   const getRiskBadge = (risk: string) => {
-    const badges: Record<string, string> = {
+    const badges = {
       low: 'bg-green-100 text-green-800',
       medium: 'bg-orange-100 text-orange-800',
       high: 'bg-red-100 text-red-800',
     };
-    return badges[risk] || badges.low;
+    return (badges as any)[risk] || badges.low;
   };
 
   const handleAddCustomer = () => {
