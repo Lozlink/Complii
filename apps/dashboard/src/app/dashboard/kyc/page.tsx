@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
-import { UserCheck, Clock, CheckCircle, XCircle, FileText, RefreshCw, type LucideIcon } from 'lucide-react';
+import { UserCheck, Clock, CheckCircle, XCircle, FileText, RefreshCw, AlertCircle, type LucideIcon } from 'lucide-react';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 
 interface Verification {
@@ -24,52 +24,16 @@ interface StatusBadge {
   icon: LucideIcon;
 }
 
-// Fallback mock data
-const mockVerifications: Verification[] = [
-  {
-    id: 'kyc_demo_1',
-    customerId: 'cus_1',
-    customerName: 'John Smith',
-    email: 'john.smith@example.com',
-    provider: 'stripe_identity',
-    status: 'verified',
-    verifiedFirstName: 'John',
-    verifiedLastName: 'Smith',
-    documentType: 'passport',
-    createdAt: '2025-12-15T10:30:00Z',
-  },
-  {
-    id: 'kyc_demo_2',
-    customerId: 'cus_2',
-    customerName: 'Sarah Johnson',
-    email: 'sarah.j@example.com',
-    provider: 'manual',
-    status: 'pending',
-    documentType: 'drivers_license',
-    createdAt: '2025-12-20T14:30:00Z',
-  },
-  {
-    id: 'kyc_demo_3',
-    customerId: 'cus_3',
-    customerName: 'Michael Chen',
-    email: 'mchen@example.com',
-    provider: 'stripe_identity',
-    status: 'rejected',
-    documentType: 'passport',
-    rejectionReason: 'Document quality insufficient',
-    createdAt: '2025-12-18T09:15:00Z',
-  },
-];
-
 export default function KycPage() {
   const [verifications, setVerifications] = useState<Verification[]>([]);
   const [loading, setLoading] = useState(true);
-  const [usingMockData, setUsingMockData] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const [filterStatus, setFilterStatus] = useState<string>('all');
   const [actionLoading, setActionLoading] = useState<string | null>(null);
 
   const fetchVerifications = useCallback(async () => {
     setLoading(true);
+    setError(null);
     try {
       const params = new URLSearchParams();
       params.set('limit', '50');
@@ -79,16 +43,10 @@ export default function KycPage() {
       if (!response.ok) throw new Error('API unavailable');
 
       const data = await response.json();
-      if (data.data && data.data.length > 0) {
-        setVerifications(data.data);
-        setUsingMockData(false);
-      } else {
-        setVerifications(mockVerifications);
-        setUsingMockData(true);
-      }
+      setVerifications(data.data || []);
     } catch {
-      setVerifications(mockVerifications);
-      setUsingMockData(true);
+      setError('Failed to load verifications. Please try again.');
+      setVerifications([]);
     } finally {
       setLoading(false);
     }
@@ -241,9 +199,10 @@ export default function KycPage() {
           </div>
         </CardHeader>
         <CardContent>
-          {usingMockData && (
-            <div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded-lg text-blue-800 text-sm">
-              Showing demo data. Connect to the API to see real verifications.
+          {error && (
+            <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg text-red-800 text-sm flex items-center">
+              <AlertCircle className="w-4 h-4 mr-2" />
+              {error}
             </div>
           )}
 

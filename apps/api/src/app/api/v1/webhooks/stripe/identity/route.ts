@@ -38,7 +38,9 @@ export async function POST(request: NextRequest) {
 
   const supabase = getServiceClient();
 
-  console.log('Received Stripe webhook event:', event.type);
+  console.log('=== Stripe Identity Webhook ===');
+  console.log('Event type:', event.type);
+  console.log('Event ID:', event.id);
 
   // Handle identity verification events
   if (
@@ -47,15 +49,22 @@ export async function POST(request: NextRequest) {
     event.type === 'identity.verification_session.canceled'
   ) {
     const session = event.data.object as Stripe.Identity.VerificationSession;
-    console.log('Session ID:', session.id, 'Status:', session.status);
+    console.log('Session ID:', session.id);
+    console.log('Session status:', session.status);
+    console.log('Session metadata:', JSON.stringify(session.metadata));
 
     const tenantId = session.metadata?.tenant_id;
     const customerId = session.metadata?.customer_id;
 
     if (!tenantId || !customerId) {
-      console.error('Missing tenant or customer ID in session metadata');
-      return NextResponse.json({ received: true });
+      console.error('ERROR: Missing tenant or customer ID in session metadata!');
+      console.error('tenant_id:', tenantId, 'customer_id:', customerId);
+      console.error('Full metadata:', session.metadata);
+      return NextResponse.json({ received: true, error: 'missing_metadata' });
     }
+
+    console.log('Tenant ID:', tenantId);
+    console.log('Customer ID:', customerId);
 
     // Map Stripe status to our status
     const statusMap: Record<string, string> = {

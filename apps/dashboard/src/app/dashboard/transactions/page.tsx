@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
-import { Search, Download, AlertTriangle, CheckCircle, Clock, RefreshCw } from 'lucide-react';
+import { Search, Download, AlertTriangle, CheckCircle, Clock, RefreshCw, AlertCircle } from 'lucide-react';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 
 interface Transaction {
@@ -19,62 +19,17 @@ interface Transaction {
   createdAt: string;
 }
 
-// Fallback mock data
-const mockTransactions: Transaction[] = [
-  {
-    id: 'txn_demo_1',
-    customerId: 'cus_1',
-    customerName: 'John Smith',
-    amount: 15000,
-    currency: 'AUD',
-    direction: 'incoming',
-    transactionType: 'deposit',
-    riskScore: 25,
-    riskLevel: 'low',
-    requiresTtr: true,
-    flaggedForReview: false,
-    createdAt: '2025-12-20T09:00:00Z',
-  },
-  {
-    id: 'txn_demo_2',
-    customerId: 'cus_2',
-    customerName: 'Acme Corporation',
-    amount: 55000,
-    currency: 'AUD',
-    direction: 'outgoing',
-    transactionType: 'wire_transfer',
-    riskScore: 65,
-    riskLevel: 'medium',
-    requiresTtr: true,
-    flaggedForReview: true,
-    createdAt: '2025-12-21T14:30:00Z',
-  },
-  {
-    id: 'txn_demo_3',
-    customerId: 'cus_3',
-    customerName: 'Michael Chen',
-    amount: 9500,
-    currency: 'AUD',
-    direction: 'incoming',
-    transactionType: 'deposit',
-    riskScore: 85,
-    riskLevel: 'high',
-    requiresTtr: false,
-    flaggedForReview: true,
-    createdAt: '2025-12-22T11:15:00Z',
-  },
-];
-
 export default function TransactionsPage() {
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [loading, setLoading] = useState(true);
-  const [usingMockData, setUsingMockData] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [filterStatus, setFilterStatus] = useState<string>('all');
   const [filterFlag, setFilterFlag] = useState<string>('all');
 
   const fetchTransactions = useCallback(async () => {
     setLoading(true);
+    setError(null);
     try {
       const params = new URLSearchParams();
       params.set('limit', '100');
@@ -84,16 +39,10 @@ export default function TransactionsPage() {
       if (!response.ok) throw new Error('API unavailable');
 
       const data = await response.json();
-      if (data.data && data.data.length > 0) {
-        setTransactions(data.data);
-        setUsingMockData(false);
-      } else {
-        setTransactions(mockTransactions);
-        setUsingMockData(true);
-      }
+      setTransactions(data.data || []);
     } catch {
-      setTransactions(mockTransactions);
-      setUsingMockData(true);
+      setError('Failed to load transactions. Please try again.');
+      setTransactions([]);
     } finally {
       setLoading(false);
     }
@@ -213,9 +162,10 @@ export default function TransactionsPage() {
           </div>
         </CardHeader>
         <CardContent>
-          {usingMockData && (
-            <div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded-lg text-blue-800 text-sm">
-              Showing demo data. Connect to the API to see real transactions.
+          {error && (
+            <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg text-red-800 text-sm flex items-center">
+              <AlertCircle className="w-4 h-4 mr-2" />
+              {error}
             </div>
           )}
 
