@@ -16,6 +16,7 @@ import {
 } from '@/lib/webhooks/dispatcher';
 
 interface StartKycRequest {
+  force: boolean;
   provider: VerificationProvider;
   returnUrl?: string;
   documentTypes?: DocumentType[];
@@ -48,10 +49,7 @@ function formatVerification(v: Record<string, unknown>) {
 }
 
 function extractCustomerId(idParam: string): string {
-  if (idParam.startsWith('cus_')) {
-    return idParam.slice(4);
-  }
-  return idParam;
+  return idParam.startsWith('cus_') ? idParam.slice(4) : idParam;
 }
 
 // POST /v1/customers/:id/kyc - Start KYC verification
@@ -89,19 +87,28 @@ export async function POST(
       }
 
       // Check for existing pending verification
-      const { data: existingVerification } = await supabase
-        .from('identity_verifications')
-        .select('*')
-        .eq('tenant_id', tenant.tenantId)
-        .eq('customer_id', customer.id)
-        .in('status', ['pending', 'requires_input', 'processing'])
-        .order('created_at', { ascending: false })
-        .limit(1)
-        .single();
+      if (body.force) {
+        await supabase
+          .from('identity_verifications')
+          .update({ status: 'cancelled' })
+          .eq('customer_id', customer.id)
+          .in('status', ['pending', 'requires_input', 'processing']);
+      } else {
+        // Standard check for existing pending verification
+        const {data: existingVerification} = await supabase
+          .from('identity_verifications')
+          .select('*')
+          .eq('tenant_id', tenant.tenantId)
+          .eq('customer_id', customer.id)
+          .in('status', ['pending', 'requires_input', 'processing'])
+          .order('created_at', {ascending: false})
+          .limit(1)
+          .maybeSingle();
 
-      if (existingVerification) {
-        // Return existing verification
-        return NextResponse.json(formatVerification(existingVerification));
+        if (existingVerification) {
+          // Return existing verification
+          return NextResponse.json(formatVerification(existingVerification));
+        }
       }
 
       // Create provider and start session
@@ -258,7 +265,17 @@ export async function GET(
                 rejection_details: result.rejectionDetails,
               })
               .eq('id', verification.id);
-
+            if (result.status === 'verified') {
+              await supabase
+                .from('customers')
+                .update({ verification_status: 'verified' })
+                .eq('id', customer.id);
+            } else if (result.status === 'rejected') {
+              await supabase
+                .from('customers')
+                .update({ verification_status: 'rejected' })
+                .eq('id', customer.id);
+            }
             verification.status = result.status;
             verification.verified_first_name = result.verifiedData?.firstName;
             verification.verified_last_name = result.verifiedData?.lastName;

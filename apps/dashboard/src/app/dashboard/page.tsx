@@ -69,97 +69,27 @@ interface Alert {
   createdAt: string;
 }
 
-// Fallback mock data
-const mockAnalytics: Analytics = {
-  customers: {
-    total: 1247,
-    verified: 1156,
-    pending: 78,
-    sanctioned: 3,
-    pep: 12,
-    business: 89,
-    verificationRate: 92.7,
-  },
-  transactions: {
-    total: 8934,
-    totalAmount: 12456789,
-    averageAmount: 1394,
-    ttrRequired: 234,
-    flaggedForReview: 45,
-  },
-  screenings: {
-    total: 1589,
-    matches: 18,
-    matchRate: 1.1,
-  },
-  riskDistribution: {
-    low: 1180,
-    medium: 54,
-    high: 13,
-  },
-  alerts: {
-    open: 23,
-    critical: 5,
-  },
-  cases: {
-    open: 8,
-    pending: 3,
-  },
-  ocdd: {
-    dueThisWeek: 12,
-    overdue: 4,
-  },
+const emptyAnalytics: Analytics = {
+  customers: { total: 0, verified: 0, pending: 0, sanctioned: 0, pep: 0, business: 0, verificationRate: 0 },
+  transactions: { total: 0, totalAmount: 0, averageAmount: 0, ttrRequired: 0, flaggedForReview: 0 },
+  screenings: { total: 0, matches: 0, matchRate: 0 },
+  riskDistribution: { low: 0, medium: 0, high: 0 },
+  alerts: { open: 0, critical: 0 },
+  cases: { open: 0, pending: 0 },
+  ocdd: { dueThisWeek: 0, overdue: 0 },
 };
 
-const mockAlerts: Alert[] = [
-  {
-    id: 'alert_1',
-    type: 'sanctions',
-    severity: 'critical',
-    title: 'Sanctions Match Detected',
-    description: 'Potential match found on DFAT consolidated list',
-    customerId: 'cus_789',
-    createdAt: new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString(),
-  },
-  {
-    id: 'alert_2',
-    type: 'pep',
-    severity: 'high',
-    title: 'PEP Identified',
-    description: 'Enhanced due diligence required for politically exposed person',
-    customerId: 'cus_456',
-    createdAt: new Date(Date.now() - 5 * 60 * 60 * 1000).toISOString(),
-  },
-  {
-    id: 'alert_3',
-    type: 'transaction',
-    severity: 'medium',
-    title: 'Large Transaction - TTR Required',
-    description: 'Transaction exceeds $10,000 threshold',
-    transactionId: 'txn_123',
-    createdAt: new Date(Date.now() - 8 * 60 * 60 * 1000).toISOString(),
-  },
-  {
-    id: 'alert_4',
-    type: 'ocdd',
-    severity: 'medium',
-    title: 'OCDD Review Due',
-    description: 'Customer due for ongoing due diligence review',
-    customerId: 'cus_234',
-    createdAt: new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString(),
-  },
-];
-
 export default function DashboardPage() {
-  const [analytics, setAnalytics] = useState<Analytics>(mockAnalytics);
-  const [alerts, setAlerts] = useState<Alert[]>(mockAlerts);
+  const [analytics, setAnalytics] = useState<Analytics>(emptyAnalytics);
+  const [alerts, setAlerts] = useState<Alert[]>([]);
   const [loading, setLoading] = useState(true);
-  const [usingMockData, setUsingMockData] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const [region, setRegion] = useState('AU');
   const [regulator, setRegulator] = useState('AUSTRAC');
 
   const fetchAnalytics = useCallback(async () => {
     setLoading(true);
+    setError(null);
     try {
       // Fetch analytics from multiple endpoints in parallel
       const [customersRes, transactionsRes, alertsRes, configRes] = await Promise.all([
@@ -169,43 +99,38 @@ export default function DashboardPage() {
         fetch('/api/proxy/config/regions'),
       ]);
 
-      let hasRealData = false;
-
       // Parse customer analytics
       if (customersRes.ok) {
         const customersData = await customersRes.json();
-        if (customersData.pagination?.total !== undefined) {
+        if (customersData.totalCount !== undefined || customersData.pagination?.total !== undefined) {
           setAnalytics((prev) => ({
             ...prev,
             customers: {
               ...prev.customers,
-              total: customersData.pagination.total,
+              total: customersData.totalCount ?? customersData.pagination?.total ?? 0,
             },
           }));
-          hasRealData = true;
         }
       }
 
       // Parse transaction analytics
       if (transactionsRes.ok) {
         const txData = await transactionsRes.json();
-        if (txData.pagination?.total !== undefined) {
+        if (txData.totalCount !== undefined || txData.pagination?.total !== undefined) {
           setAnalytics((prev) => ({
             ...prev,
             transactions: {
               ...prev.transactions,
-              total: txData.pagination.total,
+              total: txData.totalCount ?? txData.pagination?.total ?? 0,
             },
           }));
-          hasRealData = true;
         }
       }
 
       // Parse alerts
       if (alertsRes.ok) {
         const alertsData = await alertsRes.json();
-        if (alertsData.data && alertsData.data.length > 0) {
-          // Transform API alerts to our format
+        if (alertsData.data) {
           const transformedAlerts = alertsData.data.map((a: Record<string, unknown>) => ({
             id: a.id,
             type: a.alert_type || 'transaction',
@@ -217,7 +142,6 @@ export default function DashboardPage() {
             createdAt: a.created_at,
           }));
           setAlerts(transformedAlerts);
-          hasRealData = true;
         }
       }
 
@@ -231,10 +155,8 @@ export default function DashboardPage() {
           setRegulator(configData.current_config.regulator);
         }
       }
-
-      setUsingMockData(!hasRealData);
     } catch {
-      setUsingMockData(true);
+      setError('Failed to connect to API');
     } finally {
       setLoading(false);
     }
@@ -301,9 +223,9 @@ export default function DashboardPage() {
         </button>
       </div>
 
-      {usingMockData && (
-        <div className="p-3 bg-blue-50 border border-blue-200 rounded-lg text-blue-800 text-sm">
-          Showing demo data. Connect to the API for live analytics.
+      {error && (
+        <div className="p-3 bg-red-50 border border-red-200 rounded-lg text-red-800 text-sm">
+          {error}. Please check your API connection.
         </div>
       )}
 

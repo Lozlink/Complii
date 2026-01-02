@@ -223,11 +223,14 @@ export default function SettingsPage() {
 
   // Tenant settings
   const [tenantSettings, setTenantSettings] = useState({
-    tenantId: '1bbf7a09-3bb2-475c-8364-f616bcc1f966',
-    tenantName: 'Test Company',
-    liveApiKey: 'sk_test_2e0c2c442c19f1ba7ef77685837775c1',
-    testApiKey: 'sk_test_2e0c2c442c19f1ba7ef77685837775c1',
+    tenantId: '',
+    tenantName: '',
+    liveApiKey: '',
+    testApiKey: '',
+    liveApiKeyPrefix: '',
+    testApiKeyPrefix: '',
   });
+  const [tenantLoading, setTenantLoading] = useState(true);
 
   // User-customizable overrides (can be different from regional defaults)
   const [customSettings, setCustomSettings] = useState({
@@ -280,9 +283,35 @@ export default function SettingsPage() {
     }
   }, [selectedRegion]);
 
+  const fetchTenantSettings = useCallback(async () => {
+    setTenantLoading(true);
+    try {
+      const response = await fetch('/api/proxy/tenant/settings');
+      if (response.ok) {
+        const data = await response.json();
+        setTenantSettings({
+          tenantId: data.id || '',
+          tenantName: data.name || '',
+          liveApiKey: '',
+          testApiKey: '',
+          liveApiKeyPrefix: data.liveApiKeyPrefix || '',
+          testApiKeyPrefix: data.testApiKeyPrefix || '',
+        });
+        if (data.region) {
+          setSelectedRegion(data.region);
+        }
+      }
+    } catch (error) {
+      console.error('Failed to fetch tenant settings:', error);
+    } finally {
+      setTenantLoading(false);
+    }
+  }, []);
+
   useEffect(() => {
     fetchRegionalConfig();
-  }, [fetchRegionalConfig]);
+    fetchTenantSettings();
+  }, [fetchRegionalConfig, fetchTenantSettings]);
 
   const handleRegionChange = async (newRegion: string) => {
     setSelectedRegion(newRegion);
@@ -359,7 +388,7 @@ export default function SettingsPage() {
   const handleRotateKey = async (keyType: 'live' | 'test') => {
     if (
       confirm(
-        `Are you sure you want to rotate your ${keyType} API key? This will invalidate the current key.`
+        `Are you sure you want to rotate your ${keyType} API key? This will invalidate the current key immediately.`
       )
     ) {
       try {
@@ -370,20 +399,33 @@ export default function SettingsPage() {
         });
 
         if (response.ok) {
-          alert(`${keyType} API key rotated successfully`);
-          fetchRegionalConfig();
+          const data = await response.json();
+          setTenantSettings((prev) => ({
+            ...prev,
+            [`${keyType}ApiKey`]: data.key,
+            [`${keyType}ApiKeyPrefix`]: data.prefix,
+          }));
+          alert(`Your new ${keyType} API key has been generated. Copy it now - it will not be shown again.`);
         } else {
-          alert(`${keyType} API key rotated successfully (demo mode)`);
+          const error = await response.json();
+          alert(`Failed to rotate key: ${error.error?.message || 'Unknown error'}`);
         }
-      } catch {
-        alert(`${keyType} API key rotated successfully (demo mode)`);
+      } catch (error) {
+        console.error('Key rotation error:', error);
+        alert('Failed to rotate API key. Please try again.');
       }
     }
   };
 
-  const maskKey = (key: string) => {
-    if (!key) return '';
-    return key.substring(0, 12) + '\u2022'.repeat(20);
+  const maskKey = (key: string, prefix: string) => {
+    if (key) return key.substring(0, 12) + '\u2022'.repeat(20);
+    if (prefix) return prefix + '\u2022'.repeat(25);
+    return '\u2022'.repeat(32);
+  };
+
+  const getDisplayKey = (key: string, prefix: string, show: boolean) => {
+    if (show && key) return key;
+    return maskKey(key, prefix);
   };
 
   // Calculate effective thresholds (custom override or regional default)
@@ -844,21 +886,23 @@ export default function SettingsPage() {
               <div className="flex items-center space-x-3">
                 <div className="flex-1 relative">
                   <input
-                    type={showLiveKey ? 'text' : 'password'}
-                    value={showLiveKey ? tenantSettings.liveApiKey : maskKey(tenantSettings.liveApiKey)}
+                    type="text"
+                    value={getDisplayKey(tenantSettings.liveApiKey, tenantSettings.liveApiKeyPrefix, showLiveKey)}
                     readOnly
                     className="w-full px-4 py-2 pr-10 border border-gray-300 rounded-lg bg-gray-50 font-mono text-sm"
                   />
                   <button
                     onClick={() => setShowLiveKey(!showLiveKey)}
                     className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-500 hover:text-gray-700"
+                    disabled={!tenantSettings.liveApiKey}
                   >
                     {showLiveKey ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
                   </button>
                 </div>
                 <button
                   onClick={() => handleCopyKey(tenantSettings.liveApiKey)}
-                  className="p-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
+                  disabled={!tenantSettings.liveApiKey}
+                  className="p-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors disabled:opacity-50"
                   title="Copy key"
                 >
                   <Copy className="w-5 h-5" />
@@ -884,21 +928,23 @@ export default function SettingsPage() {
               <div className="flex items-center space-x-3">
                 <div className="flex-1 relative">
                   <input
-                    type={showTestKey ? 'text' : 'password'}
-                    value={showTestKey ? tenantSettings.testApiKey : maskKey(tenantSettings.testApiKey)}
+                    type="text"
+                    value={getDisplayKey(tenantSettings.testApiKey, tenantSettings.testApiKeyPrefix, showTestKey)}
                     readOnly
                     className="w-full px-4 py-2 pr-10 border border-gray-300 rounded-lg bg-gray-50 font-mono text-sm"
                   />
                   <button
                     onClick={() => setShowTestKey(!showTestKey)}
                     className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-500 hover:text-gray-700"
+                    disabled={!tenantSettings.testApiKey}
                   >
                     {showTestKey ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
                   </button>
                 </div>
                 <button
                   onClick={() => handleCopyKey(tenantSettings.testApiKey)}
-                  className="p-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
+                  disabled={!tenantSettings.testApiKey}
+                  className="p-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors disabled:opacity-50"
                   title="Copy key"
                 >
                   <Copy className="w-5 h-5" />

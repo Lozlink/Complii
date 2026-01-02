@@ -22,63 +22,12 @@ interface Customer {
   createdAt: string;
 }
 
-// Fallback mock data when API is unavailable
-const mockCustomers: Customer[] = [
-  {
-    id: 'cus_demo_1',
-    customerType: 'individual',
-    firstName: 'John',
-    lastName: 'Smith',
-    email: 'john.smith@example.com',
-    verificationStatus: 'verified',
-    riskLevel: 'low',
-    isSanctioned: false,
-    isPep: false,
-    createdAt: '2025-12-15T00:00:00Z',
-  },
-  {
-    id: 'cus_demo_2',
-    customerType: 'business',
-    companyName: 'Acme Corporation Pty Ltd',
-    email: 'compliance@acme.com.au',
-    verificationStatus: 'pending',
-    riskLevel: 'medium',
-    isSanctioned: false,
-    isPep: false,
-    requiresEdd: true,
-    createdAt: '2025-12-20T00:00:00Z',
-  },
-  {
-    id: 'cus_demo_3',
-    customerType: 'individual',
-    firstName: 'Michael',
-    lastName: 'Chen',
-    email: 'mchen@example.com',
-    verificationStatus: 'verified',
-    riskLevel: 'high',
-    isSanctioned: true,
-    isPep: false,
-    createdAt: '2025-12-18T00:00:00Z',
-  },
-  {
-    id: 'cus_demo_4',
-    customerType: 'individual',
-    firstName: 'Emma',
-    lastName: 'Williams',
-    email: 'emma.w@example.com',
-    verificationStatus: 'verified',
-    riskLevel: 'medium',
-    isSanctioned: false,
-    isPep: true,
-    createdAt: '2025-12-22T00:00:00Z',
-  },
-];
 
 export default function CustomersPage() {
   const router = useRouter();
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [loading, setLoading] = useState(true);
-  const [usingMockData, setUsingMockData] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [filterStatus, setFilterStatus] = useState<string>('all');
   const [filterRisk, setFilterRisk] = useState<string>('all');
@@ -86,6 +35,7 @@ export default function CustomersPage() {
 
   const fetchCustomers = useCallback(async () => {
     setLoading(true);
+    setError(null);
     try {
       const params = new URLSearchParams();
       params.set('limit', '100');
@@ -95,16 +45,10 @@ export default function CustomersPage() {
       if (!response.ok) throw new Error('API unavailable');
 
       const data = await response.json();
-      if (data.data && data.data.length > 0) {
-        setCustomers(data.data);
-        setUsingMockData(false);
-      } else {
-        setCustomers(mockCustomers);
-        setUsingMockData(true);
-      }
+      setCustomers(data.data || []);
     } catch {
-      setCustomers(mockCustomers);
-      setUsingMockData(true);
+      setError('Failed to connect to API');
+      setCustomers([]);
     } finally {
       setLoading(false);
     }
@@ -217,9 +161,9 @@ export default function CustomersPage() {
           </div>
         </CardHeader>
         <CardContent>
-          {usingMockData && (
-            <div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded-lg text-blue-800 text-sm">
-              Showing demo data. Connect to the API to see real customers.
+          {error && (
+            <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg text-red-800 text-sm">
+              {error}. Please check your API connection.
             </div>
           )}
 

@@ -5,7 +5,7 @@ import { createNotFoundError, createInternalError } from '@/lib/utils/errors';
 
 function formatCustomer(customer: Record<string, unknown>) {
   return {
-    id: `cus_${(customer.id as string).slice(0, 8)}`,
+    id: `cus_${customer.id}`,
     object: 'customer',
     email: customer.email,
     firstName: customer.first_name,
@@ -29,10 +29,7 @@ function formatCustomer(customer: Record<string, unknown>) {
 
 function extractCustomerId(idParam: string): string {
   // Handle both cus_xxx format and raw UUID
-  if (idParam.startsWith('cus_')) {
-    return idParam.slice(4);
-  }
-  return idParam;
+  return idParam.startsWith('cus_') ? idParam.slice(4) : idParam;
 }
 
 export async function GET(

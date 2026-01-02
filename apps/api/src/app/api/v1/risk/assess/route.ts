@@ -15,10 +15,7 @@ interface RiskAssessmentBody {
 }
 
 function extractCustomerId(idParam: string): string {
-  if (idParam.startsWith('cus_')) {
-    return idParam.slice(4);
-  }
-  return idParam;
+  return idParam.startsWith('cus_') ? idParam.slice(4) : idParam;
 }
 
 export async function POST(request: NextRequest) {
