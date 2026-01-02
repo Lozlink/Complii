@@ -36,14 +36,14 @@ export async function GET(request: NextRequest) {
           report_type: 'ttr',
           period_start: reportData.reportingPeriod.start,
           period_end: reportData.reportingPeriod.end,
-          transaction_count: reportData.summary.totalTransactions,
-          total_amount: reportData.summary.totalValue,
+          transaction_count: reportData.transactionCount,
+          total_amount: reportData.totalAmount,
           status: 'completed',
           generated_at: new Date().toISOString(),
           metadata: {
             format,
-            averageValue: reportData.summary.averageValue,
-            breakdown: reportData.summary.breakdown,
+            //averageValue: reportData.summary.averageValue,
+            //breakdown: reportData.summary.breakdown,
           },
         });
 
