@@ -264,14 +264,14 @@ export default function SettingsPage() {
           setRegionalConfig(data.current_config);
           setUsingMockData(false);
         } else {
-          setRegionalConfig(FALLBACK_CONFIGS[selectedRegion] || FALLBACK_CONFIGS.AU);
+          setRegionalConfig(FALLBACK_CONFIGS[selectedRegion] ?? FALLBACK_CONFIGS.AU);
           setUsingMockData(true);
         }
       } else {
         throw new Error('API unavailable');
       }
     } catch {
-      setRegionalConfig(FALLBACK_CONFIGS[selectedRegion] || FALLBACK_CONFIGS.AU);
+      setRegionalConfig(FALLBACK_CONFIGS[selectedRegion] ?? FALLBACK_CONFIGS.AU);
       setUsingMockData(true);
     } finally {
       setLoading(false);
@@ -293,13 +293,13 @@ export default function SettingsPage() {
         if (data.config) {
           setRegionalConfig(data.config);
         } else {
-          setRegionalConfig(FALLBACK_CONFIGS[newRegion] || FALLBACK_CONFIGS.AU);
+          setRegionalConfig(FALLBACK_CONFIGS[newRegion] ?? FALLBACK_CONFIGS.AU);
         }
       } else {
-        setRegionalConfig(FALLBACK_CONFIGS[newRegion] || FALLBACK_CONFIGS.AU);
+        setRegionalConfig(FALLBACK_CONFIGS[newRegion] ?? FALLBACK_CONFIGS.AU);
       }
     } catch {
-      setRegionalConfig(FALLBACK_CONFIGS[newRegion] || FALLBACK_CONFIGS.AU);
+      setRegionalConfig(FALLBACK_CONFIGS[newRegion] ?? FALLBACK_CONFIGS.AU);
     } finally {
       setLoading(false);
     }
