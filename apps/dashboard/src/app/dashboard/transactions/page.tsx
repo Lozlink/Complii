@@ -1,103 +1,161 @@
 'use client';
 
-import { useState } from 'react';
-import { Search, Download, AlertTriangle, CheckCircle, Clock } from 'lucide-react';
+import { useState, useEffect, useCallback } from 'react';
+import { Search, Download, AlertTriangle, CheckCircle, Clock, RefreshCw } from 'lucide-react';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 
-// Mock data
-const mockTransactions = [
+interface Transaction {
+  id: string;
+  customerId: string;
+  customerName?: string;
+  amount: number;
+  currency: string;
+  direction: 'incoming' | 'outgoing';
+  transactionType: string;
+  riskScore: number;
+  riskLevel: 'low' | 'medium' | 'high';
+  flaggedForReview: boolean;
+  requiresTtr: boolean;
+  createdAt: string;
+}
+
+// Fallback mock data
+const mockTransactions: Transaction[] = [
   {
-    id: 'txn_1',
+    id: 'txn_demo_1',
     customerId: 'cus_1',
     customerName: 'John Smith',
     amount: 15000,
     currency: 'AUD',
-    type: 'deposit',
-    status: 'completed',
-    requiresTTR: true,
-    flaggedForReview: false,
+    direction: 'incoming',
+    transactionType: 'deposit',
     riskScore: 25,
+    riskLevel: 'low',
+    requiresTtr: true,
+    flaggedForReview: false,
     createdAt: '2025-12-20T09:00:00Z',
   },
   {
-    id: 'txn_2',
+    id: 'txn_demo_2',
     customerId: 'cus_2',
-    customerName: 'Sarah Johnson',
-    amount: 5500,
+    customerName: 'Acme Corporation',
+    amount: 55000,
     currency: 'AUD',
-    type: 'withdrawal',
-    status: 'pending',
-    requiresTTR: false,
-    flaggedForReview: false,
-    riskScore: 15,
+    direction: 'outgoing',
+    transactionType: 'wire_transfer',
+    riskScore: 65,
+    riskLevel: 'medium',
+    requiresTtr: true,
+    flaggedForReview: true,
     createdAt: '2025-12-21T14:30:00Z',
   },
   {
-    id: 'txn_3',
+    id: 'txn_demo_3',
     customerId: 'cus_3',
     customerName: 'Michael Chen',
-    amount: 25000,
+    amount: 9500,
     currency: 'AUD',
-    type: 'deposit',
-    status: 'completed',
-    requiresTTR: true,
-    flaggedForReview: true,
+    direction: 'incoming',
+    transactionType: 'deposit',
     riskScore: 85,
+    riskLevel: 'high',
+    requiresTtr: false,
+    flaggedForReview: true,
     createdAt: '2025-12-22T11:15:00Z',
-  },
-  {
-    id: 'txn_4',
-    customerId: 'cus_4',
-    customerName: 'Emma Williams',
-    amount: 3200,
-    currency: 'USD',
-    type: 'deposit',
-    status: 'completed',
-    requiresTTR: false,
-    flaggedForReview: false,
-    riskScore: 20,
-    createdAt: '2025-12-23T16:45:00Z',
   },
 ];
 
 export default function TransactionsPage() {
+  const [transactions, setTransactions] = useState<Transaction[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [usingMockData, setUsingMockData] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const [filterStatus, setFilterStatus] = useState<string>('all');
   const [filterFlag, setFilterFlag] = useState<string>('all');
 
-  const filteredTransactions = mockTransactions.filter((txn) => {
+  const fetchTransactions = useCallback(async () => {
+    setLoading(true);
+    try {
+      const params = new URLSearchParams();
+      params.set('limit', '100');
+      if (filterFlag === 'flagged') params.set('flagged_for_review', 'true');
+
+      const response = await fetch(`/api/proxy/transactions?${params.toString()}`);
+      if (!response.ok) throw new Error('API unavailable');
+
+      const data = await response.json();
+      if (data.data && data.data.length > 0) {
+        setTransactions(data.data);
+        setUsingMockData(false);
+      } else {
+        setTransactions(mockTransactions);
+        setUsingMockData(true);
+      }
+    } catch {
+      setTransactions(mockTransactions);
+      setUsingMockData(true);
+    } finally {
+      setLoading(false);
+    }
+  }, [filterFlag]);
+
+  useEffect(() => {
+    fetchTransactions();
+  }, [fetchTransactions]);
+
+  const filteredTransactions = transactions.filter((txn) => {
     const matchesSearch =
-      txn.customerName.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      (txn.customerName || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
       txn.id.toLowerCase().includes(searchTerm.toLowerCase());
 
-    const matchesStatus = filterStatus === 'all' || txn.status === filterStatus;
     const matchesFlagged =
       filterFlag === 'all' ||
       (filterFlag === 'flagged' && txn.flaggedForReview) ||
-      (filterFlag === 'ttr' && txn.requiresTTR);
+      (filterFlag === 'ttr' && txn.requiresTtr);
 
-    return matchesSearch && matchesStatus && matchesFlagged;
+    return matchesSearch && matchesFlagged;
   });
 
-  const getStatusBadge = (status: string) => {
-    const badges = {
-      completed: { class: 'bg-green-100 text-green-800', icon: CheckCircle },
-      pending: { class: 'bg-yellow-100 text-yellow-800', icon: Clock },
-      failed: { class: 'bg-red-100 text-red-800', icon: AlertTriangle },
+  const stats = {
+    total: transactions.length,
+    totalValue: transactions.reduce((sum, txn) => sum + txn.amount, 0),
+    requiresTtr: transactions.filter((t) => t.requiresTtr).length,
+    flagged: transactions.filter((t) => t.flaggedForReview).length,
+  };
+
+  const getRiskBadge = (level: string) => {
+    const badges: Record<string, string> = {
+      low: 'bg-green-100 text-green-800',
+      medium: 'bg-orange-100 text-orange-800',
+      high: 'bg-red-100 text-red-800',
     };
-    return badges[status as keyof typeof badges] || badges.pending;
+    return badges[level] || badges.low;
   };
 
-  const getRiskBadge = (score: number) => {
-    if (score >= 70) return 'bg-red-100 text-red-800';
-    if (score >= 40) return 'bg-orange-100 text-orange-800';
-    return 'bg-green-100 text-green-800';
-  };
+  const handleExport = () => {
+    const csvContent = [
+      ['ID', 'Customer', 'Amount', 'Currency', 'Direction', 'Type', 'Risk', 'TTR', 'Flagged', 'Date'].join(','),
+      ...filteredTransactions.map(t => [
+        t.id,
+        t.customerName || t.customerId,
+        t.amount,
+        t.currency,
+        t.direction,
+        t.transactionType,
+        t.riskLevel,
+        t.requiresTtr,
+        t.flaggedForReview,
+        t.createdAt
+      ].join(','))
+    ].join('\n');
 
-  const getRiskLevel = (score: number) => {
-    if (score >= 70) return 'High';
-    if (score >= 40) return 'Medium';
-    return 'Low';
+    const blob = new Blob([csvContent], { type: 'text/csv' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `transactions-${new Date().toISOString().split('T')[0]}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
   };
 
   return (
@@ -113,27 +171,21 @@ export default function TransactionsPage() {
       <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
         <div className="bg-white rounded-lg border border-gray-200 shadow-sm p-6">
           <p className="text-sm font-medium text-gray-600">Total Transactions</p>
-          <p className="mt-2 text-3xl font-semibold text-gray-900">
-            {mockTransactions.length}
-          </p>
+          <p className="mt-2 text-3xl font-semibold text-gray-900">{stats.total}</p>
         </div>
         <div className="bg-white rounded-lg border border-gray-200 shadow-sm p-6">
           <p className="text-sm font-medium text-gray-600">Total Value</p>
           <p className="mt-2 text-3xl font-semibold text-gray-900">
-            ${mockTransactions.reduce((sum, txn) => sum + txn.amount, 0).toLocaleString()}
+            ${stats.totalValue.toLocaleString()}
           </p>
         </div>
         <div className="bg-white rounded-lg border border-gray-200 shadow-sm p-6">
           <p className="text-sm font-medium text-gray-600">Requires TTR</p>
-          <p className="mt-2 text-3xl font-semibold text-orange-600">
-            {mockTransactions.filter((t) => t.requiresTTR).length}
-          </p>
+          <p className="mt-2 text-3xl font-semibold text-orange-600">{stats.requiresTtr}</p>
         </div>
         <div className="bg-white rounded-lg border border-gray-200 shadow-sm p-6">
           <p className="text-sm font-medium text-gray-600">Flagged for Review</p>
-          <p className="mt-2 text-3xl font-semibold text-red-600">
-            {mockTransactions.filter((t) => t.flaggedForReview).length}
-          </p>
+          <p className="mt-2 text-3xl font-semibold text-red-600">{stats.flagged}</p>
         </div>
       </div>
 
@@ -141,15 +193,34 @@ export default function TransactionsPage() {
         <CardHeader>
           <div className="flex items-center justify-between">
             <CardTitle>Transaction History</CardTitle>
-            <button className="flex items-center px-3 py-2 text-sm border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors">
-              <Download className="w-4 h-4 mr-2" />
-              Export
-            </button>
+            <div className="flex items-center space-x-2">
+              <button
+                onClick={fetchTransactions}
+                disabled={loading}
+                className="flex items-center px-3 py-2 text-sm border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors disabled:opacity-50"
+              >
+                <RefreshCw className={`w-4 h-4 mr-2 ${loading ? 'animate-spin' : ''}`} />
+                Refresh
+              </button>
+              <button
+                onClick={handleExport}
+                className="flex items-center px-3 py-2 text-sm border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
+              >
+                <Download className="w-4 h-4 mr-2" />
+                Export
+              </button>
+            </div>
           </div>
         </CardHeader>
         <CardContent>
+          {usingMockData && (
+            <div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded-lg text-blue-800 text-sm">
+              Showing demo data. Connect to the API to see real transactions.
+            </div>
+          )}
+
           {/* Filters */}
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
             <div className="md:col-span-2">
               <div className="relative">
                 <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
@@ -164,106 +235,91 @@ export default function TransactionsPage() {
             </div>
             <div>
               <select
-                value={filterStatus}
-                onChange={(e) => setFilterStatus(e.target.value)}
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent"
-              >
-                <option value="all">All Statuses</option>
-                <option value="completed">Completed</option>
-                <option value="pending">Pending</option>
-                <option value="failed">Failed</option>
-              </select>
-            </div>
-            <div>
-              <select
                 value={filterFlag}
                 onChange={(e) => setFilterFlag(e.target.value)}
                 className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent"
               >
-                <option value="all">All Flags</option>
+                <option value="all">All Transactions</option>
                 <option value="flagged">Flagged for Review</option>
                 <option value="ttr">Requires TTR</option>
               </select>
             </div>
           </div>
 
+          {/* Loading State */}
+          {loading && (
+            <div className="flex items-center justify-center py-12">
+              <RefreshCw className="w-8 h-8 animate-spin text-primary" />
+              <span className="ml-3 text-gray-600">Loading transactions...</span>
+            </div>
+          )}
+
           {/* Table */}
-          <div className="overflow-x-auto">
-            <table className="w-full">
-              <thead className="bg-gray-50 border-b border-gray-200">
-                <tr>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Transaction ID
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Customer
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Amount
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Type
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Status
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Risk
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Flags
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Date
-                  </th>
-                </tr>
-              </thead>
-              <tbody className="bg-white divide-y divide-gray-200">
-                {filteredTransactions.map((txn) => {
-                  const statusBadge = getStatusBadge(txn.status);
-                  return (
+          {!loading && (
+            <div className="overflow-x-auto">
+              <table className="w-full">
+                <thead className="bg-gray-50 border-b border-gray-200">
+                  <tr>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Transaction
+                    </th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Amount
+                    </th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Direction
+                    </th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Risk
+                    </th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Flags
+                    </th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Date
+                    </th>
+                  </tr>
+                </thead>
+                <tbody className="bg-white divide-y divide-gray-200">
+                  {filteredTransactions.map((txn) => (
                     <tr key={txn.id} className="hover:bg-gray-50">
                       <td className="px-6 py-4 whitespace-nowrap">
-                        <span className="text-sm font-medium text-gray-900">{txn.id}</span>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <div className="text-sm text-gray-900">{txn.customerName}</div>
-                        <div className="text-sm text-gray-500">{txn.customerId}</div>
+                        <div className="text-sm font-medium text-gray-900">{txn.id}</div>
+                        <div className="text-sm text-gray-500">{txn.customerName || txn.customerId}</div>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
                         <div className="text-sm font-semibold text-gray-900">
                           {txn.currency} ${txn.amount.toLocaleString()}
                         </div>
+                        <div className="text-xs text-gray-500 capitalize">{txn.transactionType}</div>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
-                        <span className="text-sm text-gray-900 capitalize">{txn.type}</span>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <span
-                          className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${statusBadge.class}`}
-                        >
-                          <statusBadge.icon className="w-3 h-3 mr-1" />
-                          {txn.status}
+                        <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium capitalize ${
+                          txn.direction === 'incoming' ? 'bg-green-100 text-green-800' : 'bg-blue-100 text-blue-800'
+                        }`}>
+                          {txn.direction}
                         </span>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
-                        <span
-                          className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${getRiskBadge(txn.riskScore)}`}
-                        >
-                          {getRiskLevel(txn.riskScore)} ({txn.riskScore})
+                        <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium capitalize ${getRiskBadge(txn.riskLevel)}`}>
+                          {txn.riskLevel} ({txn.riskScore})
                         </span>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
                         <div className="flex flex-col space-y-1">
-                          {txn.requiresTTR && (
+                          {txn.requiresTtr && (
                             <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-orange-100 text-orange-800">
                               TTR Required
                             </span>
                           )}
                           {txn.flaggedForReview && (
                             <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-red-100 text-red-800">
+                              <AlertTriangle className="w-3 h-3 mr-1" />
                               Flagged
                             </span>
+                          )}
+                          {!txn.requiresTtr && !txn.flaggedForReview && (
+                            <CheckCircle className="w-4 h-4 text-green-600" />
                           )}
                         </div>
                       </td>
@@ -271,13 +327,13 @@ export default function TransactionsPage() {
                         {new Date(txn.createdAt).toLocaleDateString()}
                       </td>
                     </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
 
-          {filteredTransactions.length === 0 && (
+          {!loading && filteredTransactions.length === 0 && (
             <div className="text-center py-12">
               <p className="text-gray-500">No transactions found</p>
             </div>
