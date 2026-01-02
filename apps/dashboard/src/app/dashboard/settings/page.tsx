@@ -219,7 +219,7 @@ export default function SettingsPage() {
   });
 
   const [selectedRegion, setSelectedRegion] = useState('AU');
-  const [regionalConfig, setRegionalConfig] = useState<RegionalConfig>(FALLBACK_CONFIGS.AU);
+  const [regionalConfig, setRegionalConfig] = useState<RegionalConfig>(FALLBACK_CONFIGS.AU as RegionalConfig);
 
   // Tenant settings
   const [tenantSettings, setTenantSettings] = useState({
