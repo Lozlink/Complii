@@ -20,9 +20,9 @@ interface ReviewRequest {
 
 function formatVerification(v: Record<string, unknown>) {
   return {
-    id: `ver_${(v.id as string).slice(0, 8)}`,
+    id: `ver_${v.id as string}`,
     object: 'identity_verification',
-    customerId: `cus_${(v.customer_id as string).slice(0, 8)}`,
+    customerId: `cus_${v.customer_id as string}`,
     provider: v.provider,
     status: v.status,
     verifiedData: v.verified_first_name
@@ -43,12 +43,12 @@ function formatVerification(v: Record<string, unknown>) {
   };
 }
 
-function extractVerificationId(idParam: string): string {
-  if (idParam.startsWith('ver_')) {
-    return idParam.slice(4);
-  }
-  return idParam;
-}
+// function extractVerificationId(idParam: string): string {
+//   if (idParam.startsWith('ver_')) {
+//     return idParam.slice(4);
+//   }
+//   return idParam;
+// }
 
 // POST /v1/identity-verifications/:id/review - Admin review verification
 export async function POST(
@@ -77,7 +77,7 @@ export async function POST(
         );
       }
 
-      const verificationId = extractVerificationId(id);
+      const verificationId = (id);
 
       // Get verification
       const { data: verification, error: fetchError } = await supabase

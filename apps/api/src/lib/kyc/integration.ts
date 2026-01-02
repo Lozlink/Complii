@@ -161,6 +161,7 @@ export async function updateCustomerVerificationStatus(
   const updates: Record<string, unknown> = {
     verification_status: status,
   };
+  const cleanId = customerId.startsWith('cus_') ? customerId.slice(4) : customerId;
 
   // Optionally update verified identity data
   if (status === 'verified' && verifiedData) {

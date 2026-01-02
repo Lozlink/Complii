@@ -4,10 +4,8 @@ import { getServiceClient } from '@/lib/db/client';
 import { createInternalError, createNotFoundError } from '@/lib/utils/errors';
 
 function extractCustomerId(idParam: string): string {
-  if (idParam.startsWith('cus_')) {
-    return idParam.slice(4);
-  }
-  return idParam;
+  return idParam.startsWith('cus_') ? idParam.slice(4) : idParam;
+
 }
 
 function extractDocumentId(idParam: string): string {

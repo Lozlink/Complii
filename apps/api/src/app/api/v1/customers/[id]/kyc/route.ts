@@ -12,10 +12,12 @@ import {
   DocumentType,
 } from '@/lib/kyc';
 import {
+  dispatchKycStatusChanged,
   dispatchKycVerificationStarted,
 } from '@/lib/webhooks/dispatcher';
 
 interface StartKycRequest {
+  force: boolean;
   provider: VerificationProvider;
   returnUrl?: string;
   documentTypes?: DocumentType[];
@@ -25,9 +27,9 @@ interface StartKycRequest {
 
 function formatVerification(v: Record<string, unknown>) {
   return {
-    id: `ver_${(v.id as string).slice(0, 8)}`,
+    id: `ver_${v.id}`,
     object: 'identity_verification',
-    customerId: `cus_${(v.customer_id as string).slice(0, 8)}`,
+    customerId: `cus_${v.customer_id as string}`,
     provider: v.provider,
     status: v.status,
     verifiedData: v.verified_first_name
@@ -48,10 +50,7 @@ function formatVerification(v: Record<string, unknown>) {
 }
 
 function extractCustomerId(idParam: string): string {
-  if (idParam.startsWith('cus_')) {
-    return idParam.slice(4);
-  }
-  return idParam;
+  return idParam.startsWith('cus_') ? idParam.slice(4) : idParam;
 }
 
 // POST /v1/customers/:id/kyc - Start KYC verification
@@ -89,19 +88,28 @@ export async function POST(
       }
 
       // Check for existing pending verification
-      const { data: existingVerification } = await supabase
-        .from('identity_verifications')
-        .select('*')
-        .eq('tenant_id', tenant.tenantId)
-        .eq('customer_id', customer.id)
-        .in('status', ['pending', 'requires_input', 'processing'])
-        .order('created_at', { ascending: false })
-        .limit(1)
-        .single();
+      if (body.force) {
+        await supabase
+          .from('identity_verifications')
+          .update({ status: 'cancelled' })
+          .eq('customer_id', customer.id)
+          .in('status', ['pending', 'requires_input', 'processing']);
+      } else {
+        // Standard check for existing pending verification
+        const {data: existingVerification} = await supabase
+          .from('identity_verifications')
+          .select('*')
+          .eq('tenant_id', tenant.tenantId)
+          .eq('customer_id', customer.id)
+          .in('status', ['pending', 'requires_input', 'processing'])
+          .order('created_at', {ascending: false})
+          .limit(1)
+          .maybeSingle();
 
-      if (existingVerification) {
-        // Return existing verification
-        return NextResponse.json(formatVerification(existingVerification));
+        if (existingVerification) {
+          // Return existing verification
+          return NextResponse.json(formatVerification(existingVerification));
+        }
       }
 
       // Create provider and start session
@@ -258,6 +266,24 @@ export async function GET(
                 rejection_details: result.rejectionDetails,
               })
               .eq('id', verification.id);
+            if (result.status === 'verified') {
+              await supabase
+                .from('customers')
+                .update({ verification_status: 'verified' })
+                .eq('id', customer.id);
+            } else if (result.status === 'rejected') {
+              await supabase
+                .from('customers')
+                .update({ verification_status: 'rejected' })
+                .eq('id', customer.id);
+            }
+
+            await dispatchKycStatusChanged(supabase, tenant.tenantId, {
+              verificationId: `ver_${verification.id.slice(0, 8)}`,
+              customerId: `cus_${customer.id.slice(0, 8)}`,
+              status: result.status,
+              provider: 'stripe_identity'
+            });
 
             verification.status = result.status;
             verification.verified_first_name = result.verifiedData?.firstName;

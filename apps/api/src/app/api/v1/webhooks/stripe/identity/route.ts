@@ -146,8 +146,8 @@ export async function POST(request: NextRequest) {
 
     // Dispatch webhook to customer's endpoint
     await dispatchKycStatusChanged(supabase, tenantId, {
-      verificationId: `ver_${verification.id.slice(0, 8)}`,
-      customerId: `cus_${customerId.slice(0, 8)}`,
+      verificationId: `ver_${verification.id}`,
+      customerId: `cus_${customerId}`,
       status: newStatus,
       previousStatus: verification.status,
       provider: 'stripe_identity',

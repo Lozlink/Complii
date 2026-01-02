@@ -24,7 +24,7 @@ interface CustomerCreateBody {
 
 function formatCustomer(customer: Record<string, unknown>) {
   return {
-    id: `cus_${(customer.id as string).slice(0, 8)}`,
+    id: `cus_${customer.id}`,
     object: 'customer',
     email: customer.email,
     firstName: customer.first_name,

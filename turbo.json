@@ -14,7 +14,9 @@
         "STRIPE_SECRET_KEY",
         "NODE_ENV",
         "NGROK_AUTHTOKEN",
-        "STRIPE_IDENTITY_WEBHOOK_SECRET"
+        "STRIPE_IDENTITY_WEBHOOK_SECRET",
+        "COMPLII_API_URL",
+        "COMPLII_API_KEY"
       ]
     },
     "lint": {

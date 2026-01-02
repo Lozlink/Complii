@@ -92,7 +92,7 @@ export default function WebhooksPage() {
       failed: { class: 'bg-red-100 text-red-800', icon: XCircle },
       pending: { class: 'bg-yellow-100 text-yellow-800', icon: Clock },
     };
-    return badges[status as keyof typeof badges] || badges.pending;
+    return (badges as any)[status] || badges.pending;
   };
 
   return (

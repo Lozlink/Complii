@@ -4,6 +4,23 @@ import { useState } from 'react';
 import { Search, AlertTriangle, CheckCircle, User } from 'lucide-react';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 
+interface MatchDetails {
+  position: string;
+  category: string;
+  jurisdiction: string;
+  riskLevel: string;
+  associatedPersons: string[];
+}
+
+interface PepScreening {
+  id: string;
+  name: string;
+  country: string;
+  result: string;
+  isPep: boolean;
+  matchDetails?: MatchDetails;
+  screenedAt: string;
+}
 export default function PepPage() {
   const [screeningName, setScreeningName] = useState('');
   const [screeningCountry, setScreeningCountry] = useState('');
@@ -15,7 +32,7 @@ export default function PepPage() {
   };
 
   // Mock screening history
-  const screeningHistory = [
+  const screeningHistory: PepScreening[] = [
     {
       id: 'pep_1',
       name: 'John Smith',
@@ -70,7 +87,7 @@ export default function PepPage() {
       medium: 'bg-orange-100 text-orange-800',
       high: 'bg-red-100 text-red-800',
     };
-    return badges[risk as keyof typeof badges] || badges.low;
+    return (badges as any)[risk] || badges.low;
   };
 
   return (
@@ -244,7 +261,7 @@ export default function PepPage() {
                         </div>
                       </div>
 
-                      {screening.matchDetails && (
+                      {screening?.matchDetails && (
                         <div className="mt-4 bg-orange-100 border border-orange-300 rounded-lg p-4">
                           <h5 className="text-sm font-semibold text-orange-900 mb-3">
                             PEP Details - Enhanced Due Diligence Required
