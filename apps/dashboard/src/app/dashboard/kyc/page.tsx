@@ -136,6 +136,7 @@ export default function KycPage() {
   };
 
   const getStatusBadge = (status: string): StatusBadge => {
+    const defaultBadge: StatusBadge = { class: 'bg-yellow-100 text-yellow-800', icon: Clock };
     const badges: Record<string, StatusBadge> = {
       verified: { class: 'bg-green-100 text-green-800', icon: CheckCircle },
       pending: { class: 'bg-yellow-100 text-yellow-800', icon: Clock },
@@ -143,7 +144,7 @@ export default function KycPage() {
       processing: { class: 'bg-blue-100 text-blue-800', icon: Clock },
       rejected: { class: 'bg-red-100 text-red-800', icon: XCircle },
     };
-    return badges[status] ?? badges.pending;
+    return badges[status] ?? defaultBadge;
   };
 
   return (
