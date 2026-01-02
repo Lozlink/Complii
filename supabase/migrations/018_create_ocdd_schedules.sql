@@ -141,10 +141,7 @@ CREATE INDEX idx_ocdd_schedules_customer ON ocdd_schedules(tenant_id, customer_i
 CREATE INDEX idx_ocdd_schedules_status ON ocdd_schedules(tenant_id, status);
 CREATE INDEX idx_ocdd_schedules_next ON ocdd_schedules(next_scheduled_at) WHERE status = 'active';
 CREATE INDEX idx_ocdd_schedules_type ON ocdd_schedules(tenant_id, schedule_type);
-CREATE INDEX idx_ocdd_schedules_due ON ocdd_schedules(tenant_id, next_scheduled_at)
-    WHERE status = 'active' AND next_scheduled_at <= NOW() + INTERVAL '7 days';
-CREATE INDEX idx_ocdd_schedules_overdue ON ocdd_schedules(tenant_id, next_scheduled_at)
-    WHERE status = 'active' AND next_scheduled_at < NOW();
+CREATE INDEX idx_ocdd_schedules_due_at ON ocdd_schedules(tenant_id, next_scheduled_at) WHERE status = 'active';
 
 -- Indexes for ocdd_executions
 CREATE INDEX idx_ocdd_executions_schedule ON ocdd_executions(schedule_id);
