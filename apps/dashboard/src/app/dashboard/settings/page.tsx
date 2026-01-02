@@ -223,10 +223,10 @@ export default function SettingsPage() {
 
   // Tenant settings
   const [tenantSettings, setTenantSettings] = useState({
-    tenantId: 'tnt_demo_1234567890',
-    tenantName: 'Acme Financial Services',
-    liveApiKey: 'complii_live_xxxxxxxxxxxxxxxxxxxxxxxxxxxx',
-    testApiKey: 'complii_test_xxxxxxxxxxxxxxxxxxxxxxxxxxxx',
+    tenantId: '1bbf7a09-3bb2-475c-8364-f616bcc1f966',
+    tenantName: 'Test Company',
+    liveApiKey: 'sk_test_2e0c2c442c19f1ba7ef77685837775c1',
+    testApiKey: 'sk_test_2e0c2c442c19f1ba7ef77685837775c1',
   });
 
   // User-customizable overrides (can be different from regional defaults)

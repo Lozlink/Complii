@@ -143,7 +143,7 @@ export default function KycPage() {
       processing: { class: 'bg-blue-100 text-blue-800', icon: Clock },
       rejected: { class: 'bg-red-100 text-red-800', icon: XCircle },
     };
-    return badges[status]
+    return badges[status] ?? badges.pending;
   };
 
   return (
