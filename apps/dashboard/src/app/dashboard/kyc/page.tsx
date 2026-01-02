@@ -252,7 +252,7 @@ export default function KycPage() {
             <div className="space-y-4">
               {filteredVerifications.map((verification) => {
                 const badge = getStatusBadge(verification.status);
-                const BadgeIcon = badge.icon || null;
+                const BadgeIcon = badge.icon || Clock;
                 return (
                   <div
                     key={verification.id}
