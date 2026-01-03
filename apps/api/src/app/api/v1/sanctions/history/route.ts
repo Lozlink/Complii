@@ -2,6 +2,10 @@ import { NextRequest, NextResponse } from 'next/server';
 import { withAuth, AuthenticatedRequest } from '@/lib/auth/middleware';
 import { getServiceClient } from '@/lib/db/client';
 
+const extractedID = (string: string)   => {
+  return string.startsWith('cus_') ? string.slice(4) : string;
+}
+
 // GET /v1/sanctions/history - Get sanctions screening history
 export async function GET(request: NextRequest) {
   return withAuth(request, async (req: AuthenticatedRequest) => {
@@ -12,7 +16,7 @@ export async function GET(request: NextRequest) {
 
       const limit = parseInt(searchParams.get('limit') || '50', 10);
       const offset = parseInt(searchParams.get('offset') || '0', 10);
-      const customerId = searchParams.get('customer_id');
+      let customerId = searchParams.get('customer_id');
       const status = searchParams.get('status');
 
       let query = supabase
@@ -22,8 +26,10 @@ export async function GET(request: NextRequest) {
         .order('screened_at', { ascending: false })
         .range(offset, offset + limit - 1);
 
+
+
       if (customerId) {
-        query = query.eq('customer_id', customerId);
+        query = query.eq('customer_id',extractedID(customerId));
       }
 
       if (status) {

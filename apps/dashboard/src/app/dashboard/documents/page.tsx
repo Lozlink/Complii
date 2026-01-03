@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
+import { useSearchParams } from 'next/navigation';
 import {
   FileText,
   Upload,
@@ -60,8 +61,11 @@ const DOCUMENT_TYPES = [
 ];
 
 export default function DocumentsPage() {
+  const searchParams = useSearchParams();
+  const customerFromUrl = searchParams.get('customer');
+
   const [customers, setCustomers] = useState<Customer[]>([]);
-  const [selectedCustomerId, setSelectedCustomerId] = useState<string>('');
+  const [selectedCustomerId, setSelectedCustomerId] = useState<string>(customerFromUrl || '');
   const [documents, setDocuments] = useState<Document[]>([]);
   const [loading, setLoading] = useState(false);
   const [customersLoading, setCustomersLoading] = useState(true);
