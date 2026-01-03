@@ -152,7 +152,9 @@ export async function POST(request: NextRequest) {
       if (customer) {
         await sendKycNotification(
           tenantId,
-          customer.email,
+          // testing
+          // customer.email,
+          'mark.mekhayl@gmail.com',
           'verified',
           updates.verified_first_name as string
         );
