@@ -3,8 +3,64 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useParams } from 'next/navigation';
 import Link from 'next/link';
-import { ArrowLeft, Shield, AlertTriangle, CheckCircle, FileText, CreditCard, RefreshCw, Building2, User, X, ChevronDown } from 'lucide-react';
+import {
+  ArrowLeft,
+  Shield,
+  AlertTriangle,
+  CheckCircle,
+  FileText,
+  CreditCard,
+  RefreshCw,
+  Building2,
+  User,
+  X,
+  ChevronRight,
+  ChevronDown,
+  Clock,
+  UserCheck,
+  FolderOpen,
+  Flag,
+  Download,
+  Eye,
+} from 'lucide-react';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
+
+interface ActionItem {
+  id: string;
+  type: 'kyc' | 'documents' | 'sanctions' | 'pep' | 'transactions';
+  priority: 'high' | 'medium';
+  title: string;
+  description: string;
+  count?: number;
+}
+
+interface KycVerification {
+  id: string;
+  status: string;
+  provider: string;
+}
+
+interface Document {
+  id: string;
+  documentType: string;
+  status: string;
+  fileName?: string;
+  fileType?: string;
+  fileUrl?: string;
+  createdAt?: string;
+}
+
+interface SanctionsScreening {
+  id: string;
+  status: string;
+  matchScore?: number;
+}
+
+interface PepScreening {
+  id: string;
+  status: string;
+  matchScore?: number;
+}
 
 interface Customer {
   id: string;
@@ -58,6 +114,14 @@ export default function CustomerDetailPage() {
   const [selectedProvider, setSelectedProvider] = useState<'stripe_identity' | 'manual'>('stripe_identity');
   const [selectedDocTypes, setSelectedDocTypes] = useState<string[]>(['passport']);
 
+  // Action items state
+  const [actionItems, setActionItems] = useState<ActionItem[]>([]);
+  const [actionsLoading, setActionsLoading] = useState(true);
+  const [reviewingKyc, setReviewingKyc] = useState(false);
+  const [kycDocuments, setKycDocuments] = useState<Document[]>([]);
+  const [expandedKyc, setExpandedKyc] = useState(false);
+  const [downloadingDoc, setDownloadingDoc] = useState<string | null>(null);
+
   const fetchCustomer = useCallback(async () => {
     setLoading(true);
     setError(null);
@@ -86,6 +150,190 @@ export default function CustomerDetailPage() {
       setLoading(false);
     }
   }, [customerId]);
+
+  const fetchActionItems = useCallback(async () => {
+    setActionsLoading(true);
+    try {
+      const items: ActionItem[] = [];
+
+      // Fetch all data in parallel
+      const [kycRes, docsRes, sanctionsRes, pepRes, flaggedRes] = await Promise.all([
+        fetch(`/api/proxy/customers/${customerId}/kyc`).catch(() => null),
+        fetch(`/api/proxy/customers/${customerId}/kyc/documents?limit=20`).catch(() => null),
+        fetch(`/api/proxy/sanctions/history?customer_id=${customerId}&status=potential_match&limit=5`).catch(() => null),
+        fetch(`/api/proxy/pep/history?customer_id=${customerId}&status=potential_match&limit=5`).catch(() => null),
+        fetch(`/api/proxy/transactions?customer_id=${customerId}&status=flagged&limit=10`).catch(() => null),
+      ]);
+
+      // Check KYC verification needing review and get documents
+      let hasPendingKyc = false;
+      if (kycRes?.ok) {
+        const kyc: KycVerification = await kycRes.json();
+        if (kyc.provider === 'manual' && ['pending', 'requires_input'].includes(kyc.status)) {
+          hasPendingKyc = true;
+          items.push({
+            id: kyc.id,
+            type: 'kyc',
+            priority: 'high',
+            title: 'KYC Pending Review',
+            description: 'Manual verification awaiting review',
+          });
+        }
+      }
+
+      // Store documents for inline viewing
+      if (docsRes?.ok) {
+        const docsData = await docsRes.json();
+        const docs: Document[] = docsData.data || [];
+        setKycDocuments(docs);
+
+        // Only show separate documents action item if no pending KYC (to avoid duplication)
+        const pendingDocs = docs.filter((d) => d.status === 'pending');
+        if (pendingDocs.length > 0 && !hasPendingKyc) {
+          const docTypes = pendingDocs.map((d) => d.documentType.replace('_', ' ')).join(', ');
+          items.push({
+            id: 'docs',
+            type: 'documents',
+            priority: 'medium',
+            title: `${pendingDocs.length} Document${pendingDocs.length > 1 ? 's' : ''} Pending`,
+            description: docTypes,
+            count: pendingDocs.length,
+          });
+        }
+      } else {
+        setKycDocuments([]);
+      }
+
+      // Check sanctions matches
+      if (sanctionsRes?.ok) {
+        const sanctionsData = await sanctionsRes.json();
+        const sanctions: SanctionsScreening[] = sanctionsData.data || [];
+        const topSanction = sanctions[0];
+        if (topSanction) {
+          items.push({
+            id: topSanction.id,
+            type: 'sanctions',
+            priority: 'high',
+            title: `Sanctions Match${topSanction.matchScore ? ` (${topSanction.matchScore}%)` : ''}`,
+            description: 'Potential match found - requires review',
+          });
+        }
+      }
+
+      // Check PEP matches
+      if (pepRes?.ok) {
+        const pepData = await pepRes.json();
+        const peps: PepScreening[] = pepData.data || [];
+        const topPep = peps[0];
+        if (topPep) {
+          items.push({
+            id: topPep.id,
+            type: 'pep',
+            priority: 'high',
+            title: `PEP Match${topPep.matchScore ? ` (${topPep.matchScore}%)` : ''}`,
+            description: 'Politically exposed person match - requires review',
+          });
+        }
+      }
+
+      // Check flagged transactions
+      if (flaggedRes?.ok) {
+        const flaggedData = await flaggedRes.json();
+        const flagged: Transaction[] = flaggedData.data || [];
+        if (flagged.length > 0) {
+          items.push({
+            id: 'flagged',
+            type: 'transactions',
+            priority: 'medium',
+            title: `${flagged.length} Flagged Transaction${flagged.length > 1 ? 's' : ''}`,
+            description: 'Transactions requiring review',
+            count: flagged.length,
+          });
+        }
+      }
+
+      setActionItems(items);
+    } catch (err) {
+      console.error('Failed to fetch action items:', err);
+    } finally {
+      setActionsLoading(false);
+    }
+  }, [customerId]);
+
+  const handleKycReview = async (verificationId: string, decision: 'approve' | 'reject') => {
+    setReviewingKyc(true);
+    try {
+      const reason = decision === 'reject' ? prompt('Please enter rejection reason:') : null;
+      if (decision === 'reject' && !reason) {
+        setReviewingKyc(false);
+        return;
+      }
+
+      const response = await fetch(`/api/proxy/identity-verifications/${verificationId}/review`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          decision,
+          reason: reason || undefined,
+          notes: `${decision === 'approve' ? 'Approved' : 'Rejected'} via customer detail page`,
+        }),
+      });
+
+      if (response.ok) {
+        alert(`Verification ${decision === 'approve' ? 'approved' : 'rejected'} successfully!`);
+        await Promise.all([fetchCustomer(), fetchActionItems()]);
+      } else {
+        const data = await response.json();
+        alert(`Failed to ${decision} verification: ${data.error?.message || 'Unknown error'}`);
+      }
+    } catch {
+      alert(`Failed to ${decision} verification`);
+    } finally {
+      setReviewingKyc(false);
+    }
+  };
+
+  const handleDownloadDocument = async (doc: Document) => {
+    setDownloadingDoc(doc.id);
+    try {
+      const response = await fetch(`/api/proxy/documents/${doc.id}/download`);
+      if (response.ok) {
+        const blob = await response.blob();
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = doc.fileName || `${doc.documentType}.${doc.fileType || 'pdf'}`;
+        document.body.appendChild(a);
+        a.click();
+        window.URL.revokeObjectURL(url);
+        document.body.removeChild(a);
+      } else {
+        alert('Failed to download document');
+      }
+    } catch {
+      alert('Failed to download document');
+    } finally {
+      setDownloadingDoc(null);
+    }
+  };
+
+  const handleViewDocument = async (doc: Document) => {
+    setDownloadingDoc(doc.id);
+    try {
+      const response = await fetch(`/api/proxy/documents/${doc.id}/download`);
+      if (response.ok) {
+        const blob = await response.blob();
+        const url = window.URL.createObjectURL(blob);
+        window.open(url, '_blank');
+      } else {
+        alert('Failed to view document');
+      }
+    } catch {
+      alert('Failed to view document');
+    } finally {
+      setDownloadingDoc(null);
+    }
+  };
 
   const handleTriggerKyc = async () => {
     setKycLoading(true);
@@ -151,7 +399,8 @@ export default function CustomerDetailPage() {
 
   useEffect(() => {
     fetchCustomer();
-  }, [fetchCustomer]);
+    fetchActionItems();
+  }, [fetchCustomer, fetchActionItems]);
 
   const getStatusBadge = (status: string): { class: string; icon: typeof CheckCircle } => {
     const defaultBadge = { class: 'bg-yellow-100 text-yellow-800', icon: AlertTriangle };
@@ -250,6 +499,226 @@ export default function CustomerDetailPage() {
           </div>
         </div>
       </div>
+
+      {/* Action Items Card */}
+      <Card className={actionItems.length > 0 ? 'border-orange-200 bg-orange-50/50' : 'border-green-200 bg-green-50/50'}>
+        <CardHeader className="pb-3">
+          <div className="flex items-center justify-between">
+            <CardTitle className="flex items-center text-lg">
+              {actionItems.length > 0 ? (
+                <>
+                  <AlertTriangle className="w-5 h-5 text-orange-600 mr-2" />
+                  Action Required ({actionItems.length})
+                </>
+              ) : (
+                <>
+                  <CheckCircle className="w-5 h-5 text-green-600 mr-2" />
+                  No Action Required
+                </>
+              )}
+            </CardTitle>
+            <button
+              onClick={fetchActionItems}
+              disabled={actionsLoading}
+              className="p-2 text-gray-500 hover:bg-white rounded-lg transition-colors"
+            >
+              <RefreshCw className={`w-4 h-4 ${actionsLoading ? 'animate-spin' : ''}`} />
+            </button>
+          </div>
+        </CardHeader>
+        <CardContent className="pt-0">
+          {actionsLoading && actionItems.length === 0 ? (
+            <div className="flex items-center justify-center py-4">
+              <RefreshCw className="w-5 h-5 animate-spin text-gray-400" />
+              <span className="ml-2 text-sm text-gray-500">Checking for actions...</span>
+            </div>
+          ) : actionItems.length === 0 ? (
+            <p className="text-sm text-green-700">All compliance checks are up to date.</p>
+          ) : (
+            <div className="space-y-3">
+              {actionItems.map((item) => {
+                const isHigh = item.priority === 'high';
+                const getIcon = () => {
+                  switch (item.type) {
+                    case 'kyc': return UserCheck;
+                    case 'documents': return FolderOpen;
+                    case 'sanctions': return Shield;
+                    case 'pep': return AlertTriangle;
+                    case 'transactions': return Flag;
+                    default: return Clock;
+                  }
+                };
+                const Icon = getIcon();
+
+                // KYC items get special expandable treatment with inline documents
+                if (item.type === 'kyc') {
+                  return (
+                    <div key={item.id} className="rounded-lg border bg-red-50 border-red-200 overflow-hidden">
+                      <div className="flex items-center justify-between p-3">
+                        <div className="flex items-center flex-1">
+                          <div className="p-2 rounded-lg mr-3 bg-red-100">
+                            <Icon className="w-4 h-4 text-red-600" />
+                          </div>
+                          <div className="flex-1">
+                            <p className="text-sm font-medium text-red-900">{item.title}</p>
+                            <p className="text-xs text-red-700">
+                              {item.description}
+                              {kycDocuments.length > 0 && ` • ${kycDocuments.length} document(s) uploaded`}
+                            </p>
+                          </div>
+                        </div>
+                        <div className="flex items-center space-x-2 ml-4">
+                          {kycDocuments.length > 0 && (
+                            <button
+                              onClick={() => setExpandedKyc(!expandedKyc)}
+                              className="flex items-center px-3 py-1.5 text-xs font-medium bg-white border border-gray-300 rounded hover:bg-gray-50"
+                            >
+                              <FolderOpen className="w-3 h-3 mr-1" />
+                              Documents
+                              {expandedKyc ? (
+                                <ChevronDown className="w-3 h-3 ml-1" />
+                              ) : (
+                                <ChevronRight className="w-3 h-3 ml-1" />
+                              )}
+                            </button>
+                          )}
+                          <button
+                            onClick={() => handleKycReview(item.id, 'approve')}
+                            disabled={reviewingKyc}
+                            className="px-3 py-1.5 text-xs font-medium bg-green-600 text-white rounded hover:bg-green-700 disabled:opacity-50"
+                          >
+                            Approve
+                          </button>
+                          <button
+                            onClick={() => handleKycReview(item.id, 'reject')}
+                            disabled={reviewingKyc}
+                            className="px-3 py-1.5 text-xs font-medium bg-red-600 text-white rounded hover:bg-red-700 disabled:opacity-50"
+                          >
+                            Reject
+                          </button>
+                        </div>
+                      </div>
+                      {/* Expandable documents section */}
+                      {expandedKyc && kycDocuments.length > 0 && (
+                        <div className="border-t border-red-200 bg-white p-3">
+                          <p className="text-xs font-medium text-gray-700 mb-2">Uploaded Documents</p>
+                          <div className="space-y-2">
+                            {kycDocuments.map((doc) => (
+                              <div
+                                key={doc.id}
+                                className="flex items-center justify-between p-2 bg-gray-50 rounded-lg"
+                              >
+                                <div className="flex items-center">
+                                  <FileText className="w-4 h-4 text-gray-400 mr-2" />
+                                  <div>
+                                    <p className="text-sm font-medium text-gray-900">
+                                      {doc.documentType.replace(/_/g, ' ')}
+                                    </p>
+                                    <p className="text-xs text-gray-500">
+                                      {doc.fileName || 'Document'} •{' '}
+                                      <span className={
+                                        doc.status === 'approved' ? 'text-green-600' :
+                                        doc.status === 'rejected' ? 'text-red-600' :
+                                        'text-yellow-600'
+                                      }>
+                                        {doc.status}
+                                      </span>
+                                    </p>
+                                  </div>
+                                </div>
+                                <div className="flex items-center space-x-1">
+                                  <button
+                                    onClick={() => handleViewDocument(doc)}
+                                    disabled={downloadingDoc === doc.id}
+                                    className="p-1.5 text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded disabled:opacity-50"
+                                    title="View"
+                                  >
+                                    {downloadingDoc === doc.id ? (
+                                      <RefreshCw className="w-4 h-4 animate-spin" />
+                                    ) : (
+                                      <Eye className="w-4 h-4" />
+                                    )}
+                                  </button>
+                                  <button
+                                    onClick={() => handleDownloadDocument(doc)}
+                                    disabled={downloadingDoc === doc.id}
+                                    className="p-1.5 text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded disabled:opacity-50"
+                                    title="Download"
+                                  >
+                                    <Download className="w-4 h-4" />
+                                  </button>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  );
+                }
+
+                // Other action items render normally
+                return (
+                  <div
+                    key={item.id}
+                    className={`flex items-center justify-between p-3 rounded-lg border ${
+                      isHigh ? 'bg-red-50 border-red-200' : 'bg-yellow-50 border-yellow-200'
+                    }`}
+                  >
+                    <div className="flex items-center flex-1">
+                      <div className={`p-2 rounded-lg mr-3 ${isHigh ? 'bg-red-100' : 'bg-yellow-100'}`}>
+                        <Icon className={`w-4 h-4 ${isHigh ? 'text-red-600' : 'text-yellow-600'}`} />
+                      </div>
+                      <div>
+                        <p className={`text-sm font-medium ${isHigh ? 'text-red-900' : 'text-yellow-900'}`}>
+                          {item.title}
+                        </p>
+                        <p className={`text-xs ${isHigh ? 'text-red-700' : 'text-yellow-700'}`}>
+                          {item.description}
+                        </p>
+                      </div>
+                    </div>
+                    <div className="flex items-center space-x-2 ml-4">
+                      {item.type === 'documents' && (
+                        <Link
+                          href={`/dashboard/documents?customer=${customerId}`}
+                          className="flex items-center px-3 py-1.5 text-xs font-medium bg-white border border-gray-300 rounded hover:bg-gray-50"
+                        >
+                          Review <ChevronRight className="w-3 h-3 ml-1" />
+                        </Link>
+                      )}
+                      {item.type === 'sanctions' && (
+                        <Link
+                          href="/dashboard/sanctions"
+                          className="flex items-center px-3 py-1.5 text-xs font-medium bg-white border border-gray-300 rounded hover:bg-gray-50"
+                        >
+                          Review <ChevronRight className="w-3 h-3 ml-1" />
+                        </Link>
+                      )}
+                      {item.type === 'pep' && (
+                        <Link
+                          href="/dashboard/pep"
+                          className="flex items-center px-3 py-1.5 text-xs font-medium bg-white border border-gray-300 rounded hover:bg-gray-50"
+                        >
+                          Review <ChevronRight className="w-3 h-3 ml-1" />
+                        </Link>
+                      )}
+                      {item.type === 'transactions' && (
+                        <Link
+                          href="/dashboard/transactions"
+                          className="flex items-center px-3 py-1.5 text-xs font-medium bg-white border border-gray-300 rounded hover:bg-gray-50"
+                        >
+                          Review <ChevronRight className="w-3 h-3 ml-1" />
+                        </Link>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </CardContent>
+      </Card>
 
       {/* KYC Verification Modal */}
       {showKycModal && (

@@ -78,14 +78,33 @@ export async function POST(
       }
 
       const verificationId = extractVerificationId(id);
-      console.log(verificationId);
-      // Get verification
-      const { data: verification, error: fetchError } = await supabase
+
+      // Get verification - try exact match first, then prefix match
+      let verification;
+      let fetchError;
+
+      // Try exact match (for full UUIDs)
+      const exactResult = await supabase
         .from('identity_verifications')
         .select('*')
         .eq('tenant_id', tenant.tenantId)
-        .ilike('id', `${verificationId}%`)
-        .single();
+        .eq('id', verificationId)
+        .maybeSingle();
+
+      if (exactResult.data) {
+        verification = exactResult.data;
+        fetchError = exactResult.error;
+      } else {
+        // Try prefix match (for truncated IDs)
+        const prefixResult = await supabase
+          .from('identity_verifications')
+          .select('*')
+          .eq('tenant_id', tenant.tenantId)
+          .ilike('id::text', `${verificationId}%`)
+          .single();
+        verification = prefixResult.data;
+        fetchError = prefixResult.error;
+      }
 
       if (fetchError || !verification) {
         return createNotFoundError('Identity verification');
@@ -119,7 +138,7 @@ export async function POST(
           reviewed_at: now,
           review_notes: body.notes,
         })
-        .eq('id', verificationId);
+        .eq('id', verification.id);
 
 
       if (updateError) {
