@@ -6,6 +6,8 @@ import {
   updateCustomerVerificationStatus,
 } from '@/lib/kyc';
 import { dispatchKycStatusChanged } from '@/lib/webhooks/dispatcher';
+import { sendKycNotification } from '@/lib/utils/notifications';
+
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY || 'sk_test_placeholder');
 
@@ -141,6 +143,21 @@ export async function POST(request: NextRequest) {
 
     // Update customer status
     if (newStatus === 'verified') {
+      const { data: customer, error: custError } = await supabase
+        .from('customers')
+        .select('email')
+        .eq('id', customerId)
+        .single();
+
+      if (customer) {
+        await sendKycNotification(
+          tenantId,
+          customer.email,
+          'verified',
+          updates.verified_first_name as string
+        );
+      }
+
       await updateCustomerVerificationStatus(supabase, customerId, 'verified', {
         firstName: updates.verified_first_name as string | undefined,
         lastName: updates.verified_last_name as string | undefined,
@@ -149,10 +166,14 @@ export async function POST(request: NextRequest) {
 
       // Trigger post-verification actions (sanctions screening, etc.)
       await triggerPostVerificationActions(supabase, tenantId, customerId);
-    } else if (session.last_error) {
+    } else if (newStatus === 'rejected' || session.status === 'requires_input') {
+      // Notify customer of failure/re-try
+      const { data: customer } = await supabase.from('customers').select('email, first_name').eq('id', customerId).single();
+      if (customer) {
+        await sendKycNotification(tenantId, customer.email, 'rejected', customer.first_name);
+      }
       await updateCustomerVerificationStatus(supabase, customerId, 'rejected');
     }
-
     // Dispatch webhook to customer's endpoint
     await dispatchKycStatusChanged(supabase, tenantId, {
       verificationId: `ver_${verification.id}`,

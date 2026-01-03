@@ -10,14 +10,15 @@
     "import-sanctions": "npx dotenvx run --env-file=.env.local --  tsx scripts/import-dfat-list.ts"
   },
   "dependencies": {
+    "@dotenvx/dotenvx": "^1.51.4",
     "@supabase/supabase-js": "^2.47.10",
     "bcryptjs": "^2.4.3",
     "next": "16.1.1",
     "react": "19.2.3",
     "react-dom": "19.2.3",
-    "xlsx": "^0.18.5",
+    "resend": "^6.6.0",
     "stripe": "^20.1.0",
-    "@dotenvx/dotenvx": "^1.51.4"
+    "xlsx": "^0.18.5"
   },
   "devDependencies": {
     "@types/bcryptjs": "^2.4.6",
