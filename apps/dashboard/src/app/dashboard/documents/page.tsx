@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import {useState, useEffect, useCallback, Suspense} from 'react';
 import { useSearchParams } from 'next/navigation';
 import {
   FileText,
@@ -60,7 +60,7 @@ const DOCUMENT_TYPES = [
   { value: 'other', label: 'Other' },
 ];
 
-export default function DocumentsPage() {
+function DocumentsContent() {
   const searchParams = useSearchParams();
   const customerFromUrl = searchParams.get('customer');
 
@@ -594,5 +594,20 @@ export default function DocumentsPage() {
         </Card>
       )}
     </div>
+  );
+}
+
+export default function DocumentsPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="flex items-center justify-center min-h-[400px]">
+          <RefreshCw className="w-8 h-8 animate-spin text-primary" />
+          <span className="ml-3 text-gray-600">Loading document management...</span>
+        </div>
+      }
+    >
+      <DocumentsContent />
+    </Suspense>
   );
 }
