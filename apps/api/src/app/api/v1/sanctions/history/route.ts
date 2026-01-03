@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { withAuth, AuthenticatedRequest } from '@/lib/auth/middleware';
 import { getServiceClient } from '@/lib/db/client';
 
-const extractedID = (string)   => {
+const extractedID = (string: string)   => {
   return string.startsWith('cus_') ? string.slice(4) : string;
 }
 
