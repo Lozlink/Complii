@@ -6,7 +6,7 @@ import { createProvider } from '@/lib/kyc';
 
 function formatVerification(v: Record<string, unknown>) {
   return {
-    id: `ver_${v.id}`,
+    id: `ver_${v.id as string}`,
     object: 'identity_verification',
     customerId: `cus_${v.customer_id as string}`,
     provider: v.provider,
@@ -50,6 +50,7 @@ export async function GET(
       const supabase = getServiceClient();
 
       const verificationId = extractVerificationId(id);
+      console.log(verificationId);
 
       // Get verification
       const { data: verification, error } = await supabase

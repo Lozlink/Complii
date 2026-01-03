@@ -16,6 +16,8 @@ import {
   dispatchKycVerificationStarted,
 } from '@/lib/webhooks/dispatcher';
 
+import { sendKycNotification } from '@/lib/utils/notifications';
+
 interface StartKycRequest {
   force: boolean;
   provider: VerificationProvider;
@@ -151,6 +153,15 @@ export async function POST(
       if (insertError) {
         console.error('Failed to create verification:', insertError);
         return createInternalError('Failed to start verification');
+      }
+
+      if (body.provider === 'manual') {
+        await sendKycNotification(
+          tenant.tenantId,
+          customer.email,
+          'started',
+          customer.first_name
+        );
       }
 
       // Update customer status to pending

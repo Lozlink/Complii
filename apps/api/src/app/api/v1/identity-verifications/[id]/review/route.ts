@@ -43,12 +43,11 @@ function formatVerification(v: Record<string, unknown>) {
   };
 }
 
-// function extractVerificationId(idParam: string): string {
-//   if (idParam.startsWith('ver_')) {
-//     return idParam.slice(4);
-//   }
-//   return idParam;
-// }
+function extractVerificationId(idParam: string): string {
+  console.log(idParam);
+  return idParam.startsWith('ver_') ? idParam.slice(4) : idParam;
+
+}
 
 // POST /v1/identity-verifications/:id/review - Admin review verification
 export async function POST(
@@ -61,6 +60,7 @@ export async function POST(
       const { tenant } = req;
       const body: ReviewRequest = await req.json();
       const supabase = getServiceClient();
+      console.log (tenant.tenantId)
 
       // Validate request
       if (!body.decision || !['approve', 'reject'].includes(body.decision)) {
@@ -77,8 +77,8 @@ export async function POST(
         );
       }
 
-      const verificationId = (id);
-
+      const verificationId = extractVerificationId(id);
+      console.log(verificationId);
       // Get verification
       const { data: verification, error: fetchError } = await supabase
         .from('identity_verifications')
@@ -119,7 +119,8 @@ export async function POST(
           reviewed_at: now,
           review_notes: body.notes,
         })
-        .eq('id', verification.id);
+        .eq('id', verificationId);
+
 
       if (updateError) {
         console.error('Failed to update verification:', updateError);

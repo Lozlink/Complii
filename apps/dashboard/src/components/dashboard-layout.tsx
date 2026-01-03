@@ -13,6 +13,7 @@ import {
   UserCheck,
   AlertTriangle,
   BarChart3,
+  FolderOpen,
 } from 'lucide-react';
 
 const navigation = [
@@ -20,6 +21,7 @@ const navigation = [
   { name: 'Customers', href: '/dashboard/customers', icon: Users },
   { name: 'Transactions', href: '/dashboard/transactions', icon: ArrowRightLeft },
   { name: 'KYC Verification', href: '/dashboard/kyc', icon: UserCheck },
+  { name: 'Documents', href: '/dashboard/documents', icon: FolderOpen },
   { name: 'Sanctions Screening', href: '/dashboard/sanctions', icon: Shield },
   { name: 'PEP Screening', href: '/dashboard/pep', icon: AlertTriangle },
   { name: 'Analytics', href: '/dashboard/analytics', icon: BarChart3 },
