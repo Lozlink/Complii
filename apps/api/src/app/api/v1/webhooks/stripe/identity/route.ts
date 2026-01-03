@@ -171,16 +171,23 @@ export async function POST(request: NextRequest) {
           : undefined,
     });
 
-    // Audit log
+    const standardActionType = newStatus === 'verified'
+      ? 'kyc_verification_completed'
+      : newStatus === 'rejected'
+        ? 'kyc_verification_failed'
+        : `kyc_verification_${newStatus}`;
+
+    // Audit log using standard action types so they appear in the Webhooks dashboard
     await supabase.from('audit_logs').insert({
       tenant_id: tenantId,
-      action_type: `stripe_identity_${session.status}`,
+      action_type: standardActionType,
       entity_type: 'identity_verification',
       entity_id: verification.id,
       description: `Stripe Identity verification ${session.status}`,
       metadata: {
         stripeSessionId: session.id,
         status: newStatus,
+        provider: 'stripe_identity'
       },
     });
 
