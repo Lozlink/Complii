@@ -43,7 +43,8 @@ export async function sendKycNotification(
 
     const result = await resend.emails.send({
       from: 'Complii Alerts <onboarding@resend.dev>',
-      to: customerEmail,
+      // testing
+      to: 'mark.mekhayl@gmail.com',
       subject: subject,
       html: html,
     });
