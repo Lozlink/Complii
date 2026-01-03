@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useParams } from 'next/navigation';
 import Link from 'next/link';
-import { ArrowLeft, Shield, AlertTriangle, CheckCircle, FileText, CreditCard, RefreshCw, Building2, User } from 'lucide-react';
+import { ArrowLeft, Shield, AlertTriangle, CheckCircle, FileText, CreditCard, RefreshCw, Building2, User, X, ChevronDown } from 'lucide-react';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 
 interface Customer {
@@ -54,6 +54,9 @@ export default function CustomerDetailPage() {
   const [kycLoading, setKycLoading] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [showKycModal, setShowKycModal] = useState(false);
+  const [selectedProvider, setSelectedProvider] = useState<'stripe_identity' | 'manual'>('stripe_identity');
+  const [selectedDocTypes, setSelectedDocTypes] = useState<string[]>(['passport']);
 
   const fetchCustomer = useCallback(async () => {
     setLoading(true);
@@ -87,30 +90,42 @@ export default function CustomerDetailPage() {
   const handleTriggerKyc = async () => {
     setKycLoading(true);
     try {
-      const isRestart = customer?.verificationStatus === 'pending';
+      // Force new verification if restarting or re-verifying
+      const shouldForce = customer?.verificationStatus === 'pending' || customer?.verificationStatus === 'verified';
+
+      const body: Record<string, unknown> = {
+        provider: selectedProvider,
+        returnUrl: window.location.href,
+        force: shouldForce,
+      };
+
+      if (selectedProvider === 'manual') {
+        body.documentTypes = selectedDocTypes;
+      }
 
       const response = await fetch(`/api/proxy/customers/${customerId}/kyc`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({
-          provider: 'stripe_identity', // API requires this
-          returnUrl: window.location.href,
-          force: isRestart
-        }),
+        body: JSON.stringify(body),
       });
 
       if (response.ok) {
         const data = await response.json();
-        // If the API returns a URL (like for Stripe Identity), redirect to it
-        if (data.url) {
+        setShowKycModal(false);
+
+        if (selectedProvider === 'stripe_identity' && data.url) {
           window.open(data.url);
+          alert('Stripe Identity verification opened in a new tab.');
+        } else if (selectedProvider === 'manual') {
+          alert('Manual verification started! Documents can be uploaded via the Documents page.');
         }
-        // Refresh customer data to show 'pending' status
+
         await fetchCustomer();
       } else {
-        alert('Failed to initiate KYC verification');
+        const data = await response.json();
+        alert(`Failed to initiate KYC verification: ${data.error?.message || 'Unknown error'}`);
       }
     } catch (err) {
       console.error('KYC trigger error:', err);
@@ -119,6 +134,20 @@ export default function CustomerDetailPage() {
       setKycLoading(false);
     }
   };
+
+  const toggleDocType = (docType: string) => {
+    setSelectedDocTypes((prev) =>
+      prev.includes(docType) ? prev.filter((d) => d !== docType) : [...prev, docType]
+    );
+  };
+
+  const DOCUMENT_TYPES = [
+    { value: 'passport', label: 'Passport' },
+    { value: 'drivers_license', label: "Driver's License" },
+    { value: 'national_id', label: 'National ID' },
+    { value: 'utility_bill', label: 'Utility Bill (Address)' },
+    { value: 'bank_statement', label: 'Bank Statement (Address)' },
+  ];
 
   useEffect(() => {
     fetchCustomer();
@@ -221,6 +250,109 @@ export default function CustomerDetailPage() {
           </div>
         </div>
       </div>
+
+      {/* KYC Verification Modal */}
+      {showKycModal && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+          <Card className="w-full max-w-md mx-4">
+            <CardHeader>
+              <div className="flex items-center justify-between">
+                <CardTitle>Start Identity Verification</CardTitle>
+                <button
+                  onClick={() => setShowKycModal(false)}
+                  className="p-1 hover:bg-gray-100 rounded"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Verification Method
+                  </label>
+                  <div className="space-y-2">
+                    <label className="flex items-start p-3 border rounded-lg cursor-pointer hover:bg-gray-50">
+                      <input
+                        type="radio"
+                        name="provider"
+                        value="stripe_identity"
+                        checked={selectedProvider === 'stripe_identity'}
+                        onChange={() => setSelectedProvider('stripe_identity')}
+                        className="mt-1 mr-3"
+                      />
+                      <div>
+                        <p className="text-sm font-medium text-gray-900">Stripe Identity (Automated)</p>
+                        <p className="text-xs text-gray-500">
+                          Customer captures ID and selfie via Stripe. Instant verification.
+                        </p>
+                      </div>
+                    </label>
+                    <label className="flex items-start p-3 border rounded-lg cursor-pointer hover:bg-gray-50">
+                      <input
+                        type="radio"
+                        name="provider"
+                        value="manual"
+                        checked={selectedProvider === 'manual'}
+                        onChange={() => setSelectedProvider('manual')}
+                        className="mt-1 mr-3"
+                      />
+                      <div>
+                        <p className="text-sm font-medium text-gray-900">Manual Review</p>
+                        <p className="text-xs text-gray-500">
+                          Customer uploads documents. Staff reviews and approves.
+                        </p>
+                      </div>
+                    </label>
+                  </div>
+                </div>
+
+                {selectedProvider === 'manual' && (
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Required Documents
+                    </label>
+                    <div className="space-y-1 border rounded-lg p-2 max-h-40 overflow-y-auto">
+                      {DOCUMENT_TYPES.map((docType) => (
+                        <label
+                          key={docType.value}
+                          className="flex items-center p-2 hover:bg-gray-50 rounded cursor-pointer"
+                        >
+                          <input
+                            type="checkbox"
+                            checked={selectedDocTypes.includes(docType.value)}
+                            onChange={() => toggleDocType(docType.value)}
+                            className="mr-3 h-4 w-4 text-primary focus:ring-primary border-gray-300 rounded"
+                          />
+                          <span className="text-sm text-gray-900">{docType.label}</span>
+                        </label>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                <div className="flex justify-end space-x-3 pt-4">
+                  <button
+                    onClick={() => setShowKycModal(false)}
+                    className="px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    onClick={handleTriggerKyc}
+                    disabled={kycLoading || (selectedProvider === 'manual' && selectedDocTypes.length === 0)}
+                    className="flex items-center px-4 py-2 bg-primary text-white rounded-lg hover:bg-primary/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    {kycLoading && <RefreshCw className="w-4 h-4 mr-2 animate-spin" />}
+                    {kycLoading ? 'Starting...' : 'Start Verification'}
+                  </button>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+      )}
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Customer Information */}
@@ -359,20 +491,21 @@ export default function CustomerDetailPage() {
                 </div>
               )}
 
-              {customer.verificationStatus !== 'verified' && (
-                <button
-                  onClick={handleTriggerKyc}
-                  disabled={kycLoading}
-                  className="w-full mt-2 inline-flex items-center justify-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-primary hover:bg-primary/90 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary disabled:opacity-50"
-                >
-                  {kycLoading ? (
-                    <RefreshCw className="w-4 h-4 mr-2 animate-spin" />
-                  ) : (
-                    <Shield className="w-4 h-4 mr-2" />
-                  )}
-                  {customer.verificationStatus === 'pending' ? 'Restart Verification' : 'Verify Identity'}
-                </button>
-              )}
+              <button
+                onClick={() => setShowKycModal(true)}
+                className={`w-full mt-2 inline-flex items-center justify-center px-4 py-2 border text-sm font-medium rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary ${
+                  customer.verificationStatus === 'verified'
+                    ? 'border-gray-300 text-gray-700 bg-white hover:bg-gray-50'
+                    : 'border-transparent text-white bg-primary hover:bg-primary/90'
+                }`}
+              >
+                <Shield className="w-4 h-4 mr-2" />
+                {customer.verificationStatus === 'verified'
+                  ? 'Re-verify Identity'
+                  : customer.verificationStatus === 'pending'
+                    ? 'Restart Verification'
+                    : 'Verify Identity'}
+              </button>
             </div>
           </CardContent>
         </Card>

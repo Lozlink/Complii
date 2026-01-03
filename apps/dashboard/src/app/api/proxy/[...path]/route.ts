@@ -22,6 +22,20 @@ export async function GET(
       cache: 'no-store',
     });
 
+    const contentType = response.headers.get('content-type') || '';
+
+    // Handle non-JSON responses (CSV, XML, etc.)
+    if (contentType.includes('text/csv') || contentType.includes('application/xml') || contentType.includes('text/xml')) {
+      const blob = await response.blob();
+      return new NextResponse(blob, {
+        status: response.status,
+        headers: {
+          'Content-Type': contentType,
+          'Content-Disposition': response.headers.get('content-disposition') || '',
+        },
+      });
+    }
+
     const data = await response.json();
     return NextResponse.json(data, { status: response.status });
   } catch (error) {
