@@ -129,6 +129,7 @@ export default function CustomerDetailPage() {
   const [uploadDocType, setUploadDocType] = useState('passport');
   const [uploading, setUploading] = useState(false);
   const [expandedDocs, setExpandedDocs] = useState(true);
+  const [pendingVerificationId, setPendingVerificationId] = useState<string | null>(null);
 
   const fetchCustomer = useCallback(async () => {
     setLoading(true);
@@ -179,6 +180,7 @@ export default function CustomerDetailPage() {
         const kyc: KycVerification = await kycRes.json();
         if (kyc.provider === 'manual' && ['pending', 'requires_input'].includes(kyc.status)) {
           hasPendingKyc = true;
+          setPendingVerificationId(kyc.id);
           items.push({
             id: kyc.id,
             type: 'kyc',
@@ -186,7 +188,11 @@ export default function CustomerDetailPage() {
             title: 'KYC Pending Review',
             description: 'Manual verification awaiting review',
           });
+        } else {
+          setPendingVerificationId(null);
         }
+      } else {
+        setPendingVerificationId(null);
       }
 
       // Store documents for inline viewing
@@ -354,6 +360,9 @@ export default function CustomerDetailPage() {
       const formData = new FormData();
       formData.append('file', uploadFile);
       formData.append('documentType', uploadDocType);
+      if (pendingVerificationId) {
+        formData.append('verificationId', pendingVerificationId);
+      }
 
       const response = await fetch(`/api/proxy/customers/${customerId}/kyc/documents`, {
         method: 'POST',
@@ -554,7 +563,7 @@ export default function CustomerDetailPage() {
                 </>
               ) : (
                 <>
-                  <CheckCircle className="w-5 h-5 text-green-600 mr-2" />
+                  <CheckCircle className="w-5 h-5 text-green-600 mr-2 " />
                   No Action Required
                 </>
               )}
@@ -575,7 +584,7 @@ export default function CustomerDetailPage() {
               <span className="ml-2 text-sm text-gray-500">Checking for actions...</span>
             </div>
           ) : actionItems.length === 0 ? (
-            <p className="text-sm text-green-700">All compliance checks are up to date.</p>
+            <p className="text-sm text-green-700 py-4">All compliance checks are up to date.</p>
           ) : (
             <div className="space-y-3">
               {actionItems.map((item) => {
