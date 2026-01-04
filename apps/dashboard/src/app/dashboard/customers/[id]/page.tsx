@@ -22,6 +22,7 @@ import {
   Flag,
   Download,
   Eye,
+  Upload,
 } from 'lucide-react';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 
@@ -121,6 +122,13 @@ export default function CustomerDetailPage() {
   const [kycDocuments, setKycDocuments] = useState<Document[]>([]);
   const [expandedKyc, setExpandedKyc] = useState(false);
   const [downloadingDoc, setDownloadingDoc] = useState<string | null>(null);
+
+  // Document upload state
+  const [showUploadModal, setShowUploadModal] = useState(false);
+  const [uploadFile, setUploadFile] = useState<File | null>(null);
+  const [uploadDocType, setUploadDocType] = useState('passport');
+  const [uploading, setUploading] = useState(false);
+  const [expandedDocs, setExpandedDocs] = useState(true);
 
   const fetchCustomer = useCallback(async () => {
     setLoading(true);
@@ -296,7 +304,7 @@ export default function CustomerDetailPage() {
   const handleDownloadDocument = async (doc: Document) => {
     setDownloadingDoc(doc.id);
     try {
-      const response = await fetch(`/api/proxy/documents/${doc.id}/download`);
+      const response = await fetch(`/api/proxy/customers/${customerId}/kyc/documents/${doc.id}/download`);
       if (response.ok) {
         const blob = await response.blob();
         const url = window.URL.createObjectURL(blob);
@@ -320,7 +328,7 @@ export default function CustomerDetailPage() {
   const handleViewDocument = async (doc: Document) => {
     setDownloadingDoc(doc.id);
     try {
-      const response = await fetch(`/api/proxy/documents/${doc.id}/download`);
+      const response = await fetch(`/api/proxy/customers/${customerId}/kyc/documents/${doc.id}/download`);
       if (response.ok) {
         const blob = await response.blob();
         const url = window.URL.createObjectURL(blob);
@@ -332,6 +340,40 @@ export default function CustomerDetailPage() {
       alert('Failed to view document');
     } finally {
       setDownloadingDoc(null);
+    }
+  };
+
+  const handleUploadDocument = async () => {
+    if (!uploadFile) {
+      alert('Please select a file');
+      return;
+    }
+
+    setUploading(true);
+    try {
+      const formData = new FormData();
+      formData.append('file', uploadFile);
+      formData.append('documentType', uploadDocType);
+
+      const response = await fetch(`/api/proxy/customers/${customerId}/kyc/documents`, {
+        method: 'POST',
+        body: formData,
+      });
+
+      if (response.ok) {
+        alert('Document uploaded successfully!');
+        setShowUploadModal(false);
+        setUploadFile(null);
+        setUploadDocType('passport');
+        await fetchActionItems();
+      } else {
+        const data = await response.json();
+        alert(`Failed to upload document: ${data.error?.message || 'Unknown error'}`);
+      }
+    } catch {
+      alert('Failed to upload document');
+    } finally {
+      setUploading(false);
     }
   };
 
@@ -568,13 +610,20 @@ export default function CustomerDetailPage() {
                           </div>
                         </div>
                         <div className="flex items-center space-x-2 ml-4">
+                          <button
+                            onClick={() => setShowUploadModal(true)}
+                            className="flex items-center px-3 py-1.5 text-xs font-medium bg-blue-600 text-white rounded hover:bg-blue-700"
+                          >
+                            <Upload className="w-3 h-3 mr-1" />
+                            Upload
+                          </button>
                           {kycDocuments.length > 0 && (
                             <button
                               onClick={() => setExpandedKyc(!expandedKyc)}
                               className="flex items-center px-3 py-1.5 text-xs font-medium bg-white border border-gray-300 rounded hover:bg-gray-50"
                             >
                               <FolderOpen className="w-3 h-3 mr-1" />
-                              Documents
+                              View ({kycDocuments.length})
                               {expandedKyc ? (
                                 <ChevronDown className="w-3 h-3 ml-1" />
                               ) : (
@@ -719,6 +768,192 @@ export default function CustomerDetailPage() {
           )}
         </CardContent>
       </Card>
+
+      {/* Documents Card - Always visible when documents exist */}
+      {kycDocuments.length > 0 && (
+        <Card>
+          <CardHeader className="pb-3">
+            <div className="flex items-center justify-between">
+              <CardTitle className="flex items-center text-lg">
+                <FolderOpen className="w-5 h-5 text-gray-600 mr-2" />
+                Documents ({kycDocuments.length})
+              </CardTitle>
+              <div className="flex items-center space-x-2">
+                <button
+                  onClick={() => setShowUploadModal(true)}
+                  className="flex items-center px-3 py-1.5 text-xs font-medium bg-primary text-white rounded hover:bg-primary/90"
+                >
+                  <Upload className="w-3 h-3 mr-1" />
+                  Upload
+                </button>
+                <button
+                  onClick={() => setExpandedDocs(!expandedDocs)}
+                  className="p-2 text-gray-500 hover:bg-gray-100 rounded-lg transition-colors"
+                >
+                  {expandedDocs ? (
+                    <ChevronDown className="w-4 h-4" />
+                  ) : (
+                    <ChevronRight className="w-4 h-4" />
+                  )}
+                </button>
+              </div>
+            </div>
+          </CardHeader>
+          {expandedDocs && (
+            <CardContent className="pt-0">
+              <div className="space-y-2">
+                {kycDocuments.map((doc) => (
+                  <div
+                    key={doc.id}
+                    className="flex items-center justify-between p-3 bg-gray-50 rounded-lg"
+                  >
+                    <div className="flex items-center">
+                      <FileText className="w-5 h-5 text-gray-400 mr-3" />
+                      <div>
+                        <p className="text-sm font-medium text-gray-900">
+                          {doc.documentType.replace(/_/g, ' ')}
+                        </p>
+                        <p className="text-xs text-gray-500">
+                          {doc.fileName || 'Document'} •{' '}
+                          <span
+                            className={
+                              doc.status === 'approved'
+                                ? 'text-green-600'
+                                : doc.status === 'rejected'
+                                  ? 'text-red-600'
+                                  : 'text-yellow-600'
+                            }
+                          >
+                            {doc.status}
+                          </span>
+                        </p>
+                      </div>
+                    </div>
+                    <div className="flex items-center space-x-1">
+                      <button
+                        onClick={() => handleViewDocument(doc)}
+                        disabled={downloadingDoc === doc.id}
+                        className="p-2 text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded disabled:opacity-50"
+                        title="View"
+                      >
+                        {downloadingDoc === doc.id ? (
+                          <RefreshCw className="w-4 h-4 animate-spin" />
+                        ) : (
+                          <Eye className="w-4 h-4" />
+                        )}
+                      </button>
+                      <button
+                        onClick={() => handleDownloadDocument(doc)}
+                        disabled={downloadingDoc === doc.id}
+                        className="p-2 text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded disabled:opacity-50"
+                        title="Download"
+                      >
+                        <Download className="w-4 h-4" />
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </CardContent>
+          )}
+        </Card>
+      )}
+
+      {/* Upload Document Modal */}
+      {showUploadModal && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+          <Card className="w-full max-w-md mx-4">
+            <CardHeader>
+              <div className="flex items-center justify-between">
+                <CardTitle>Upload Document</CardTitle>
+                <button
+                  onClick={() => {
+                    setShowUploadModal(false);
+                    setUploadFile(null);
+                  }}
+                  className="p-1 hover:bg-gray-100 rounded"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Document Type
+                  </label>
+                  <select
+                    value={uploadDocType}
+                    onChange={(e) => setUploadDocType(e.target.value)}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary"
+                  >
+                    {DOCUMENT_TYPES.map((type) => (
+                      <option key={type.value} value={type.value}>
+                        {type.label}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    File
+                  </label>
+                  <div className="border-2 border-dashed border-gray-300 rounded-lg p-4 text-center">
+                    {uploadFile ? (
+                      <div className="flex items-center justify-center space-x-2">
+                        <FileText className="w-5 h-5 text-gray-400" />
+                        <span className="text-sm text-gray-700">{uploadFile.name}</span>
+                        <button
+                          onClick={() => setUploadFile(null)}
+                          className="text-red-500 hover:text-red-700"
+                        >
+                          <X className="w-4 h-4" />
+                        </button>
+                      </div>
+                    ) : (
+                      <label className="cursor-pointer">
+                        <Upload className="w-8 h-8 text-gray-400 mx-auto mb-2" />
+                        <p className="text-sm text-gray-600">Click to select file</p>
+                        <p className="text-xs text-gray-500 mt-1">
+                          JPEG, PNG, WebP, or PDF (max 10MB)
+                        </p>
+                        <input
+                          type="file"
+                          accept=".jpg,.jpeg,.png,.webp,.pdf"
+                          onChange={(e) => setUploadFile(e.target.files?.[0] || null)}
+                          className="hidden"
+                        />
+                      </label>
+                    )}
+                  </div>
+                </div>
+
+                <div className="flex justify-end space-x-3 pt-4">
+                  <button
+                    onClick={() => {
+                      setShowUploadModal(false);
+                      setUploadFile(null);
+                    }}
+                    className="px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    onClick={handleUploadDocument}
+                    disabled={uploading || !uploadFile}
+                    className="flex items-center px-4 py-2 bg-primary text-white rounded-lg hover:bg-primary/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    {uploading && <RefreshCw className="w-4 h-4 mr-2 animate-spin" />}
+                    {uploading ? 'Uploading...' : 'Upload'}
+                  </button>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+      )}
 
       {/* KYC Verification Modal */}
       {showKycModal && (

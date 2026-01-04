@@ -445,7 +445,7 @@ export default function KycPage() {
                       <div className="flex-1">
                         <div className="flex items-center space-x-3 mb-3">
                           <h4 className="text-base font-semibold text-gray-900">
-                            {verification.customerName || `Customer ${verification.customerId}`}
+                            {verification.customerName}
                           </h4>
                           <span
                             className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium capitalize ${badge.class}`}

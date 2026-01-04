@@ -3,11 +3,28 @@ import { withAuth, AuthenticatedRequest } from '@/lib/auth/middleware';
 import { getServiceClient } from '@/lib/db/client';
 import { createInternalError } from '@/lib/utils/errors';
 
+interface CustomerData {
+  first_name?: string;
+  last_name?: string;
+  email?: string;
+  company_name?: string;
+  customer_type?: string;
+}
+
 function formatVerification(v: Record<string, unknown>) {
+  const customer = v.customers as CustomerData | null;
+  const customerName = customer
+    ? customer.customer_type === 'business'
+      ? customer.company_name
+      : `${customer.first_name || ''} ${customer.last_name || ''}`.trim()
+    : undefined;
+
   return {
     id: `ver_${v.id}`,
     object: 'identity_verification',
     customerId: `cus_${v.customer_id as string}`,
+    customerName: customerName || 'Unknown',
+    email: customer?.email || undefined,
     provider: v.provider,
     status: v.status,
     verifiedData: v.verified_first_name
@@ -45,7 +62,7 @@ export async function GET(request: NextRequest) {
 
       let query = supabase
         .from('identity_verifications')
-        .select('*', { count: 'exact' })
+        .select('*, customers(first_name, last_name, email, company_name, customer_type)', { count: 'exact' })
         .eq('tenant_id', tenant.tenantId)
         .order('created_at', { ascending: false })
         .limit(limit + 1);
