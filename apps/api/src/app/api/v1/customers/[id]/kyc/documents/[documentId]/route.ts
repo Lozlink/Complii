@@ -112,17 +112,33 @@ export async function DELETE(
         return createNotFoundError('Customer');
       }
 
-      // Get document to get storage path
-      const { data: document, error: docError } = await supabase
+      let document = null;
+
+      // Try exact match first (for full UUIDs)
+      const exactResult = await supabase
         .from('customer_documents')
         .select('*')
         .eq('tenant_id', tenant.tenantId)
         .eq('customer_id', customer.id)
-        .ilike('id', `${docId}%`)
-        .single();
+        .eq('id', docId)
+        .maybeSingle();
 
-      if (docError || !document) {
-        return createNotFoundError('Document');
+      if (exactResult.data) {
+        document = exactResult.data;
+      } else {
+        // Try prefix match (for truncated IDs like doc_fad196d9)
+        const prefixResult = await supabase
+          .from('customer_documents')
+          .select('*')
+          .eq('tenant_id', tenant.tenantId)
+          .eq('customer_id', customer.id)
+          .ilike('id::text', `${docId}%`)
+          .single();
+
+        if (prefixResult.error || !prefixResult.data) {
+          return createNotFoundError('Document');
+        }
+        document = prefixResult.data;
       }
 
       // Only allow deletion of pending documents
@@ -137,6 +153,10 @@ export async function DELETE(
           { status: 400 }
         );
       }
+      await supabase
+        .from('customer_documents')
+        .delete()
+        .eq('id', document.id);
 
       // Delete from storage
       await supabase.storage

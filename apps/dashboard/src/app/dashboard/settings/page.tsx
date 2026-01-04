@@ -281,7 +281,7 @@ export default function SettingsPage() {
     } finally {
       setLoading(false);
     }
-  }, [selectedRegion]);
+  }, []);
 
   const fetchTenantSettings = useCallback(async () => {
     setTenantLoading(true);
