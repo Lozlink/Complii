@@ -41,17 +41,34 @@ export async function GET(
         return createNotFoundError('Customer');
       }
 
-      // Get document
-      const { data: document, error } = await supabase
+      // Get document - try exact match first, then prefix match
+      let document = null;
+
+      // Try exact match first (for full UUIDs)
+      const exactResult = await supabase
         .from('customer_documents')
         .select('*')
         .eq('tenant_id', tenant.tenantId)
         .eq('customer_id', customer.id)
-        .ilike('id', `${docId}%`)
-        .single();
+        .eq('id', docId)
+        .maybeSingle();
 
-      if (error || !document) {
-        return createNotFoundError('Document');
+      if (exactResult.data) {
+        document = exactResult.data;
+      } else {
+        // Try prefix match (for truncated IDs like doc_fad196d9)
+        const prefixResult = await supabase
+          .from('customer_documents')
+          .select('*')
+          .eq('tenant_id', tenant.tenantId)
+          .eq('customer_id', customer.id)
+          .ilike('id::text', `${docId}%`)
+          .single();
+
+        if (prefixResult.error || !prefixResult.data) {
+          return createNotFoundError('Document');
+        }
+        document = prefixResult.data;
       }
 
       // Download file from storage

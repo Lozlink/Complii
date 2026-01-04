@@ -34,7 +34,7 @@ const VALID_DOCUMENT_TYPES = [
 
 function formatDocument(doc: Record<string, unknown>) {
   return {
-    id: `doc_${(doc.id as string).slice(0, 8)}`,
+    id: `doc_${(doc.id as string)}`,
     object: 'customer_document',
     customerId: `cus_${(doc.customer_id as string).slice(0, 8)}`,
     verificationId: doc.verification_id

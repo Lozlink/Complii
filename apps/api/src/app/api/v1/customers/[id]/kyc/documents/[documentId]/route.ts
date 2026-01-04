@@ -5,7 +5,7 @@ import { createInternalError, createNotFoundError } from '@/lib/utils/errors';
 
 function formatDocument(doc: Record<string, unknown>) {
   return {
-    id: `doc_${(doc.id as string).slice(0, 8)}`,
+    id: `doc_${(doc.id as string)}`,
     object: 'customer_document',
     customerId: `cus_${(doc.customer_id as string).slice(0, 8)}`,
     verificationId: doc.verification_id
@@ -35,10 +35,8 @@ function extractCustomerId(idParam: string): string {
 }
 
 function extractDocumentId(idParam: string): string {
-  if (idParam.startsWith('doc_')) {
-    return idParam.slice(4);
-  }
-  return idParam;
+  return idParam.startsWith('doc_') ? idParam.slice(4) : idParam;
+
 }
 
 // GET /v1/customers/:id/kyc/documents/:documentId - Get document
