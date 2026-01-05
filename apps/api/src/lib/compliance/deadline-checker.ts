@@ -299,11 +299,11 @@ async function checkSMRDeadlines(
 
     // Get SMRs that are pending/under review and have deadlines
     const { data: pendingSMRs, error } = await supabase
-      .from('suspicious_activity_reports')
+      .from('smr_reports')
       .select(`
         id,
         customer_id,
-        suspicion_category,
+        suspicion_grounds,
         submission_deadline,
         created_at,
         customers (
@@ -370,7 +370,7 @@ async function checkSMRDeadlines(
           month: 'long',
           day: 'numeric',
         }),
-        reference: smr.suspicion_category,
+        reference: smr.suspicion_grounds,
       });
 
       if (result.success) {

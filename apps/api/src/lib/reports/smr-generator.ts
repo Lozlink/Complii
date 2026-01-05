@@ -1,4 +1,6 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
+import {calculateSMRDeadline} from "@/lib/compliance/deadline-utils";
+import { RegionalConfig } from "@/lib/config/regions";
 
 export interface SMRReportData {
   reportId: string;
@@ -11,19 +13,20 @@ export interface SMRReportData {
     suspicionFormedDate: string;
     customerId?: string;
     customerName?: string;
-    transactionIds: string[];
+    transactionIds?: string[];
     totalAmount: number;
     currency: string;
   };
-  groundsForSuspicion: string;
+  suspicionGrounds: string;
   actionTaken: string;
   reportingOfficer: {
     name: string;
     position: string;
     contactNumber: string;
   };
+  submissionDeadline?: string;
   additionalInformation?: string;
-  transactions: Array<{
+  transactions?: Array<{
     id: string;
     date: string;
     amount: number;
@@ -40,13 +43,14 @@ export interface SMRReportData {
 export async function generateSMRReport(
   supabase: SupabaseClient,
   tenantId: string,
+  config: Pick<RegionalConfig, 'holidays' | 'workweek' | 'deadlines'>,
   input: {
     activityType: 'money_laundering' | 'terrorism_financing' | 'other';
     description: string;
     suspicionFormedDate: string;
     customerId?: string;
-    transactionIds: string[];
-    groundsForSuspicion: string;
+    transactionIds?: string[];
+    suspicionGrounds: string;
     actionTaken: string;
     reportingOfficer: {
       name: string;
@@ -77,8 +81,10 @@ export async function generateSMRReport(
       customerName = `${customer.first_name} ${customer.last_name}`;
     }
   }
-
+  const suspicionFormedDate = new Date(input.suspicionFormedDate);
+  const deadline = calculateSMRDeadline(suspicionFormedDate, config);
   // Get transactions
+
   const { data: transactions } = await supabase
     .from('transactions')
     .select('*')
@@ -99,13 +105,15 @@ export async function generateSMRReport(
       type: input.activityType,
       description: input.description,
       suspicionFormedDate: input.suspicionFormedDate,
+
       customerId: input.customerId,
       customerName,
       transactionIds: input.transactionIds,
       totalAmount,
       currency,
     },
-    groundsForSuspicion: input.groundsForSuspicion,
+    suspicionGrounds: input.suspicionGrounds,
+    submissionDeadline: deadline.toISOString(),
     actionTaken: input.actionTaken,
     reportingOfficer: input.reportingOfficer,
     additionalInformation: input.additionalInformation,
@@ -131,7 +139,8 @@ export async function generateSMRReport(
     activity_type: input.activityType,
     customer_id: input.customerId,
     suspicion_formed_date: input.suspicionFormedDate,
-    grounds_for_suspicion: input.groundsForSuspicion,
+    suspicion_grounds: input.suspicionGrounds,
+    submission_deadline: deadline.toISOString(),
     action_taken: input.actionTaken,
     reporting_officer: input.reportingOfficer,
     transaction_ids: input.transactionIds,
@@ -170,7 +179,7 @@ export function generateSMRReportXML(data: SMRReportData): string {
     ${data.suspectedActivity.customerName ? `<CustomerName>${escapeXml(data.suspectedActivity.customerName)}</CustomerName>` : ''}
     <TotalAmount currency="${data.suspectedActivity.currency}">${data.suspectedActivity.totalAmount}</TotalAmount>
   </SuspectedActivity>
-  <GroundsForSuspicion>${escapeXml(data.groundsForSuspicion)}</GroundsForSuspicion>
+  <GroundsForSuspicion>${escapeXml(data.suspicionGrounds)}</GroundsForSuspicion>
   <ActionTaken>${escapeXml(data.actionTaken)}</ActionTaken>
   <ReportingOfficer>
     <Name>${escapeXml(data.reportingOfficer.name)}</Name>

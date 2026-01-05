@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getServiceClient } from '@/lib/db/client';
 import { withAuth, AuthenticatedRequest } from '@/lib/auth/middleware';
 import { generateSMRReport, generateSMRReportXML } from '@/lib/reports/smr-generator';
+import {getTenantConfig, RegionalConfig} from "@/lib/config/regions";
 
 export const runtime = 'nodejs';
 
@@ -14,6 +15,7 @@ export async function POST(request: NextRequest) {
     try {
       const { tenant } = req;
       const supabase = getServiceClient();
+      const config = getTenantConfig(tenant.region, tenant.settings);
 
       const body = await req.json();
       const {
@@ -22,7 +24,7 @@ export async function POST(request: NextRequest) {
         suspicionFormedDate,
         customerId,
         transactionIds,
-        groundsForSuspicion,
+        suspicionGrounds,
         actionTaken,
         reportingOfficer,
         additionalInformation,
@@ -44,21 +46,21 @@ export async function POST(request: NextRequest) {
         );
       }
 
-      if (!groundsForSuspicion || !actionTaken || !reportingOfficer) {
+      if (!suspicionGrounds || !actionTaken || !reportingOfficer) {
         return NextResponse.json(
-          { error: 'groundsForSuspicion, actionTaken, and reportingOfficer are required' },
+          { error: 'suspicionGrounds, actionTaken, and reportingOfficer are required' },
           { status: 400 }
         );
       }
 
       // Generate the report
-      const report = await generateSMRReport(supabase, tenant.tenantId, {
+      const report = await generateSMRReport(supabase, tenant.tenantId,config, {
         activityType,
         description,
         suspicionFormedDate,
         customerId,
         transactionIds,
-        groundsForSuspicion,
+        suspicionGrounds,
         actionTaken,
         reportingOfficer,
         additionalInformation,

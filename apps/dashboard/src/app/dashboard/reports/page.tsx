@@ -203,7 +203,7 @@ export default function ReportsPage() {
           description: smrDescription,
           suspicionFormedDate: smrSuspicionDate,
           transactionIds: smrTransactionIds,
-          groundsForSuspicion: smrGrounds,
+          suspicionGrounds: smrGrounds,
           actionTaken: smrActionTaken,
           reportingOfficer: {
             name: smrOfficerName,
