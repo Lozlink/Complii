@@ -82,6 +82,7 @@ export default function EDDDetailPage() {
   const [showRequestInfoModal, setShowRequestInfoModal] = useState(false);
   const [showEscalateModal, setShowEscalateModal] = useState(false);
   const [showCompleteModal, setShowCompleteModal] = useState(false);
+  const [relatedSMRs, setRelatedSMRs] = useState<Array<{ id: string; reportNumber: string; activityType: string; status: string; createdAt: string }>>([]);
 
   const fetchInvestigation = useCallback(async () => {
     setLoading(true);
@@ -94,6 +95,18 @@ export default function EDDDetailPage() {
       setInvestigation(data);
       setFindings(data.investigationFindings || '');
       setRiskSummary(data.riskAssessmentSummary || '');
+
+      // Fetch related SMR reports for this customer
+      if (data.customerId) {
+        const smrResponse = await fetch(`/api/proxy/reports/smr?limit=50`);
+        if (smrResponse.ok) {
+          const smrData = await smrResponse.json();
+          const customerSMRs = (smrData.data || []).filter(
+            (smr: { customerId?: string }) => smr.customerId === data.customerId
+          );
+          setRelatedSMRs(customerSMRs);
+        }
+      }
     } catch {
       setError('Failed to load investigation details.');
     } finally {
@@ -461,6 +474,60 @@ export default function EDDDetailPage() {
               )}
             </CardContent>
           </Card>
+
+          {/* Related SMR Reports */}
+          {relatedSMRs.length > 0 && (
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center">
+                  <FileText className="w-5 h-5 mr-2" />
+                  Related SMR Reports ({relatedSMRs.length})
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-3">
+                  {relatedSMRs.map((smr) => (
+                    <div
+                      key={smr.id}
+                      className="p-3 bg-red-50 border border-red-200 rounded-lg"
+                    >
+                      <div className="flex items-start justify-between mb-2">
+                        <div>
+                          <p className="text-sm font-medium text-gray-900">
+                            {smr.reportNumber}
+                          </p>
+                          <p className="text-xs text-gray-500 capitalize">
+                            {smr.activityType.replace(/_/g, ' ')}
+                          </p>
+                        </div>
+                        <span
+                          className={`px-2 py-0.5 rounded text-xs font-medium ${
+                            smr.status === 'submitted'
+                              ? 'bg-green-100 text-green-800'
+                              : smr.status === 'draft'
+                                ? 'bg-gray-100 text-gray-800'
+                                : 'bg-yellow-100 text-yellow-800'
+                          }`}
+                        >
+                          {smr.status}
+                        </span>
+                      </div>
+                      <p className="text-xs text-gray-500">
+                        {new Date(smr.createdAt).toLocaleDateString()}
+                      </p>
+                      <Link
+                        href="/dashboard/reports"
+                        className="inline-flex items-center text-xs text-primary hover:text-primary/80 mt-2"
+                      >
+                        View Report
+                        <ExternalLink className="w-3 h-3 ml-1" />
+                      </Link>
+                    </div>
+                  ))}
+                </div>
+              </CardContent>
+            </Card>
+          )}
 
           {/* Transaction Info */}
           {investigation.transaction && (

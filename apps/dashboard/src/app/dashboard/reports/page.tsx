@@ -23,6 +23,9 @@ interface SMRReport {
   status: string;
   suspicionFormedDate: string;
   createdAt: string;
+  customerId?: string;
+  customerName?: string;
+  customerEmail?: string;
   transactionCount?: number;
   totalAmount?: number;
 }
@@ -35,6 +38,13 @@ interface Transaction {
   createdAt: string;
 }
 
+interface Customer {
+  id: string;
+  firstName: string;
+  lastName: string;
+  email: string;
+}
+
 type ReportTab = 'ttr' | 'ifti' | 'smr';
 
 export default function ReportsPage() {
@@ -42,7 +52,9 @@ export default function ReportsPage() {
   const [reportHistory, setReportHistory] = useState<Report[]>([]);
   const [smrReports, setSmrReports] = useState<SMRReport[]>([]);
   const [flaggedTransactions, setFlaggedTransactions] = useState<Transaction[]>([]);
+  const [customers, setCustomers] = useState<Customer[]>([]);
   const [loading, setLoading] = useState(true);
+  const [customersLoading, setCustomersLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [generating, setGenerating] = useState(false);
 
@@ -55,6 +67,7 @@ export default function ReportsPage() {
   const [smrActivityType, setSmrActivityType] = useState<'money_laundering' | 'terrorism_financing' | 'other'>('money_laundering');
   const [smrDescription, setSmrDescription] = useState('');
   const [smrSuspicionDate, setSmrSuspicionDate] = useState('');
+  const [smrCustomerId, setSmrCustomerId] = useState('');
   const [smrTransactionIds, setSmrTransactionIds] = useState<string[]>([]);
   const [smrGrounds, setSmrGrounds] = useState('');
   const [smrActionTaken, setSmrActionTaken] = useState('');
@@ -62,6 +75,7 @@ export default function ReportsPage() {
   const [smrOfficerPosition, setSmrOfficerPosition] = useState('');
   const [smrOfficerContact, setSmrOfficerContact] = useState('');
   const [smrAdditionalInfo, setSmrAdditionalInfo] = useState('');
+  const [smrSkipEddTrigger, setSmrSkipEddTrigger] = useState(false);
 
   const fetchReportHistory = useCallback(async () => {
     setLoading(true);
@@ -101,11 +115,26 @@ export default function ReportsPage() {
     }
   }, []);
 
+  const fetchCustomers = useCallback(async () => {
+    setCustomersLoading(true);
+    try {
+      const response = await fetch('/api/proxy/customers?limit=200');
+      if (!response.ok) throw new Error('Failed to fetch customers');
+      const data = await response.json();
+      setCustomers(data.data || []);
+    } catch {
+      setCustomers([]);
+    } finally {
+      setCustomersLoading(false);
+    }
+  }, []);
+
   useEffect(() => {
     fetchReportHistory();
     fetchSMRReports();
     fetchFlaggedTransactions();
-  }, [fetchReportHistory, fetchSMRReports, fetchFlaggedTransactions]);
+    fetchCustomers();
+  }, [fetchReportHistory, fetchSMRReports, fetchFlaggedTransactions, fetchCustomers]);
 
   const handleGenerateTTR = async () => {
     if (!startDate || !endDate) return;
@@ -202,6 +231,7 @@ export default function ReportsPage() {
           activityType: smrActivityType,
           description: smrDescription,
           suspicionFormedDate: smrSuspicionDate,
+          customerId: smrCustomerId || undefined,
           transactionIds: smrTransactionIds,
           suspicionGrounds: smrGrounds,
           actionTaken: smrActionTaken,
@@ -211,6 +241,7 @@ export default function ReportsPage() {
             contactNumber: smrOfficerContact,
           },
           additionalInformation: smrAdditionalInfo || undefined,
+          skipEddTrigger: smrSkipEddTrigger,
         }),
       });
 
@@ -219,6 +250,7 @@ export default function ReportsPage() {
         // Reset form
         setSmrDescription('');
         setSmrSuspicionDate('');
+        setSmrCustomerId('');
         setSmrTransactionIds([]);
         setSmrGrounds('');
         setSmrActionTaken('');
@@ -226,6 +258,7 @@ export default function ReportsPage() {
         setSmrOfficerPosition('');
         setSmrOfficerContact('');
         setSmrAdditionalInfo('');
+        setSmrSkipEddTrigger(false);
         alert('SMR submitted successfully!');
       } else {
         const data = await response.json();
@@ -506,6 +539,34 @@ export default function ReportsPage() {
 
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Link to Customer (Optional)
+                  </label>
+                  {customersLoading ? (
+                    <div className="flex items-center px-4 py-2 border border-gray-300 rounded-lg bg-gray-50">
+                      <RefreshCw className="w-4 h-4 animate-spin mr-2 text-gray-400" />
+                      <span className="text-sm text-gray-500">Loading customers...</span>
+                    </div>
+                  ) : (
+                    <select
+                      value={smrCustomerId}
+                      onChange={(e) => setSmrCustomerId(e.target.value)}
+                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent"
+                    >
+                      <option value="">-- Not linked to a specific customer --</option>
+                      {customers.map((customer) => (
+                        <option key={customer.id} value={customer.id}>
+                          {customer.firstName} {customer.lastName} ({customer.email})
+                        </option>
+                      ))}
+                    </select>
+                  )}
+                  <p className="mt-1 text-xs text-gray-500">
+                    Select a customer if this report relates to a specific individual
+                  </p>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
                     Description of Suspicious Activity *
                   </label>
                   <textarea
@@ -616,6 +677,33 @@ export default function ReportsPage() {
                   />
                 </div>
 
+                {smrCustomerId && ['money_laundering', 'terrorism_financing', 'fraud'].includes(smrActivityType) && (
+                  <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+                    <div className="flex items-start">
+                      <AlertCircle className="w-5 h-5 text-blue-600 mr-3 mt-0.5 flex-shrink-0" />
+                      <div className="flex-1">
+                        <p className="text-sm font-medium text-blue-900 mb-2">
+                          Enhanced Due Diligence (EDD) Auto-Trigger
+                        </p>
+                        <p className="text-sm text-blue-700 mb-3">
+                          Submitting an SMR for {smrActivityType.replace(/_/g, ' ')} will automatically trigger an EDD investigation for this customer, updating their risk profile to high risk.
+                        </p>
+                        <label className="flex items-center cursor-pointer">
+                          <input
+                            type="checkbox"
+                            checked={smrSkipEddTrigger}
+                            onChange={(e) => setSmrSkipEddTrigger(e.target.checked)}
+                            className="mr-2 h-4 w-4 text-primary focus:ring-primary border-gray-300 rounded"
+                          />
+                          <span className="text-sm text-blue-900">
+                            Skip EDD auto-trigger (not recommended)
+                          </span>
+                        </label>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
                 <div className="flex justify-end">
                   <button
                     onClick={handleSubmitSMR}
@@ -663,6 +751,9 @@ export default function ReportsPage() {
                           Report ID
                         </th>
                         <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
+                          Customer
+                        </th>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
                           Activity Type
                         </th>
                         <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
@@ -681,6 +772,18 @@ export default function ReportsPage() {
                         <tr key={report.id} className="hover:bg-gray-50">
                           <td className="px-6 py-4 text-sm font-medium text-gray-900">
                             {report.reportNumber || report.id}
+                          </td>
+                          <td className="px-6 py-4 text-sm text-gray-500">
+                            {report.customerName ? (
+                              <div>
+                                <div className="font-medium text-gray-900">{report.customerName}</div>
+                                {report.customerEmail && (
+                                  <div className="text-xs text-gray-500">{report.customerEmail}</div>
+                                )}
+                              </div>
+                            ) : (
+                              <span className="text-gray-400 italic">No customer linked</span>
+                            )}
                           </td>
                           <td className="px-6 py-4 text-sm text-gray-500 capitalize">
                             {report.activityType.replace('_', ' ')}

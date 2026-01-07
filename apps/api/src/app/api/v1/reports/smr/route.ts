@@ -4,6 +4,10 @@ import { withAuth, AuthenticatedRequest } from '@/lib/auth/middleware';
 import { generateSMRReport, generateSMRReportXML } from '@/lib/reports/smr-generator';
 import {getTenantConfig, RegionalConfig} from "@/lib/config/regions";
 
+function extractCustomerId(idParam: string): string {
+  return idParam.startsWith('cus_') ? idParam.slice(4) : idParam;
+}
+
 export const runtime = 'nodejs';
 
 /**
@@ -28,6 +32,7 @@ export async function POST(request: NextRequest) {
         actionTaken,
         reportingOfficer,
         additionalInformation,
+        skipEddTrigger = false,
         format = 'json',
       } = body;
 
@@ -52,18 +57,20 @@ export async function POST(request: NextRequest) {
           { status: 400 }
         );
       }
+      
 
       // Generate the report
       const report = await generateSMRReport(supabase, tenant.tenantId,config, {
         activityType,
         description,
         suspicionFormedDate,
-        customerId,
+        customerId: customerId ? extractCustomerId(customerId) : undefined,
         transactionIds,
         suspicionGrounds,
         actionTaken,
         reportingOfficer,
         additionalInformation,
+        skipEddTrigger,
       });
 
       // Return in requested format
@@ -113,7 +120,14 @@ export async function GET(request: NextRequest) {
 
       let query = supabase
         .from('smr_reports')
-        .select('*', { count: 'exact' })
+        .select(`
+          *,
+          customers (
+            first_name,
+            last_name,
+            email
+          )
+        `, { count: 'exact' })
         .eq('tenant_id', tenant.tenantId)
         .order('created_at', { ascending: false })
         .range(offset, offset + limit - 1);
@@ -132,9 +146,37 @@ export async function GET(request: NextRequest) {
         return NextResponse.json({ error: error.message }, { status: 500 });
       }
 
+      // Transform database fields to camelCase for API response
+      const transformedReports = (reports || []).map((report) => {
+        const customer = report.customers as { first_name?: string; last_name?: string; email?: string } | null;
+        const customerName = customer 
+          ? `${customer.first_name || ''} ${customer.last_name || ''}`.trim() 
+          : undefined;
+
+        return {
+          id: report.id,
+          reportNumber: report.report_number,
+          activityType: report.report_type,
+          status: report.status,
+          suspicionFormedDate: report.suspicion_formed_date,
+          createdAt: report.created_at,
+          customerId: report.customer_id,
+          customerName,
+          customerEmail: customer?.email,
+          suspicionGrounds: report.suspicion_grounds,
+          submissionDeadline: report.submission_deadline,
+          actionTaken: report.action_taken,
+          reportingOfficer: report.reporting_officer,
+          transactionIds: report.transaction_ids,
+          totalAmount: report.total_amount,
+          currency: report.currency,
+          metadata: report.metadata,
+        };
+      });
+
       return NextResponse.json({
         object: 'list',
-        data: reports || [],
+        data: transformedReports,
         hasMore: offset + limit < (count || 0),
         totalCount: count || 0,
       });
