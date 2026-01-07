@@ -95,13 +95,14 @@ export default function EDDPage() {
     completed: investigations.filter((i) => i.status.startsWith('completed')).length,
   };
 
-  const getStatusBadge = (status: string) => {
+  const getStatusBadge = (status: string): { bg: string; text: string; icon: React.ReactNode } => {
+    const defaultBadge = {
+      bg: 'bg-blue-100',
+      text: 'text-blue-800',
+      icon: <FileSearch className="w-3 h-3" />,
+    };
     const badges: Record<string, { bg: string; text: string; icon: React.ReactNode }> = {
-      open: {
-        bg: 'bg-blue-100',
-        text: 'text-blue-800',
-        icon: <FileSearch className="w-3 h-3" />,
-      },
+      open: defaultBadge,
       awaiting_customer_info: {
         bg: 'bg-yellow-100',
         text: 'text-yellow-800',
@@ -133,7 +134,7 @@ export default function EDDPage() {
         icon: <Clock className="w-3 h-3" />,
       },
     };
-    return badges[status] || badges.open;
+    return badges[status] ?? defaultBadge;
   };
 
   const formatStatus = (status: string) => {

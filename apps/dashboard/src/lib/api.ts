@@ -170,6 +170,64 @@ export async function createBeneficialOwner(data: BeneficialOwnerCreateInput) {
   });
 }
 
+// Business Customers
+export async function getBusinessCustomers(params?: {
+  limit?: number;
+  riskLevel?: string;
+  verificationStatus?: string;
+}) {
+  const searchParams = new URLSearchParams();
+  if (params?.limit) searchParams.set('limit', params.limit.toString());
+  if (params?.riskLevel) searchParams.set('risk_level', params.riskLevel);
+  if (params?.verificationStatus) searchParams.set('verification_status', params.verificationStatus);
+
+  const query = searchParams.toString();
+  return apiRequest<BusinessCustomerListResponse>(`/business${query ? `?${query}` : ''}`);
+}
+
+export async function getBusinessCustomer(id: string) {
+  return apiRequest<BusinessCustomer>(`/business/${id}`);
+}
+
+export async function registerBusiness(data: BusinessCustomerCreateInput) {
+  return apiRequest<BusinessCustomerWithRisk>('/business/register', {
+    method: 'POST',
+    body: JSON.stringify(data),
+  });
+}
+
+export async function updateBusinessCustomer(id: string, data: Partial<BusinessCustomerUpdateInput>) {
+  return apiRequest<BusinessCustomer>(`/business/${id}`, {
+    method: 'PATCH',
+    body: JSON.stringify(data),
+  });
+}
+
+// Business Beneficial Owners
+export async function getBusinessOwners(businessId: string) {
+  return apiRequest<BusinessBeneficialOwnerListResponse>(`/business/${businessId}/owners`);
+}
+
+export async function createBusinessOwner(businessId: string, data: BusinessBeneficialOwnerCreateInput) {
+  return apiRequest<BusinessBeneficialOwner>(`/business/${businessId}/owners`, {
+    method: 'POST',
+    body: JSON.stringify(data),
+  });
+}
+
+export async function updateBusinessOwner(businessId: string, ownerId: string, data: Partial<BusinessBeneficialOwnerUpdateInput>) {
+  return apiRequest<BusinessBeneficialOwner>(`/business/${businessId}/owners/${ownerId}`, {
+    method: 'PATCH',
+    body: JSON.stringify(data),
+  });
+}
+
+export async function deleteBusinessOwner(businessId: string, ownerId: string) {
+  return apiRequest<{ deleted: boolean; id: string }>(`/business/${businessId}/owners/${ownerId}`, {
+    method: 'DELETE',
+  });
+}
+
 // Sanctions Screening
 export async function screenSanctions(data: { firstName: string; lastName: string; dateOfBirth?: string; country?: string }) {
   return apiRequest<ScreeningResult>('/sanctions/screen', {
@@ -444,4 +502,169 @@ export interface TtrReport {
   transactionCount: number;
   totalAmount: number;
   data: unknown[];
+}
+
+// Business Customer Types
+export type EntityType = 'company' | 'sole_trader' | 'partnership' | 'trust' | 'smsf';
+
+export type BusinessOwnershipType = 'direct' | 'indirect' | 'control_person';
+
+export interface BusinessCustomer {
+  id: string;
+  object: 'business_customer';
+  primaryContactCustomerId: string;
+  abn: string;
+  acn?: string;
+  businessName: string;
+  tradingName?: string;
+  entityType: EntityType;
+  abrVerified: boolean;
+  abrVerifiedAt?: string;
+  gstRegistered: boolean;
+  entityStatus: string;
+  mainBusinessLocation?: {
+    state: string;
+    postcode: string;
+  };
+  industryCode?: string;
+  industryDescription?: string;
+  verificationStatus: 'pending' | 'verified' | 'rejected' | 'requires_review';
+  riskScore: number;
+  riskLevel: 'low' | 'medium' | 'high';
+  uboVerificationComplete: boolean;
+  requiresEnhancedDd: boolean;
+  eddCompleted: boolean;
+  monitoringLevel: 'standard' | 'ongoing_review' | 'enhanced' | 'blocked';
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface BusinessCustomerWithRisk extends BusinessCustomer {
+  riskAssessment: {
+    score: number;
+    level: 'low' | 'medium' | 'high';
+    blocked: boolean;
+    blockReason?: string;
+    requiresEdd: boolean;
+  };
+}
+
+export interface BusinessBeneficialOwner {
+  id: string;
+  object: 'business_beneficial_owner';
+  businessCustomerId: string;
+  firstName: string;
+  middleName?: string;
+  lastName: string;
+  dateOfBirth: string;
+  email?: string;
+  phone?: string;
+  ownershipPercentage: number;
+  ownershipType: BusinessOwnershipType;
+  role?: string;
+  verificationStatus: 'unverified' | 'pending' | 'verified' | 'rejected';
+  verificationLevel: 'none' | 'manual' | 'stripe_identity' | 'dvs_verified';
+  isPep: boolean;
+  pepRelationship?: string;
+  isSanctioned: boolean;
+  lastScreeningAt?: string;
+  lastVerifiedAt?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface BusinessCustomerCreateInput {
+  primaryContactCustomerId: string;
+  entityType: EntityType;
+  abn: string;
+  acn?: string;
+  businessName: string;
+  tradingName?: string;
+  abrResponse?: {
+    abnStatus: 'Active' | 'Cancelled' | 'Deleted';
+    gstRegistered: boolean;
+    gstRegisteredDate?: string;
+    mainBusinessLocation?: {
+      state: string;
+      postcode: string;
+    };
+  };
+  registeredAddress?: {
+    line1: string;
+    line2?: string;
+    city: string;
+    state: string;
+    postcode: string;
+    country: string;
+  };
+  principalAddress?: {
+    line1: string;
+    line2?: string;
+    city: string;
+    state: string;
+    postcode: string;
+    country: string;
+  };
+  industryCode?: string;
+  industryDescription?: string;
+}
+
+export interface BusinessCustomerUpdateInput {
+  businessName?: string;
+  tradingName?: string;
+  verificationStatus?: 'pending' | 'verified' | 'rejected' | 'requires_review';
+  verificationNotes?: string;
+  uboVerificationComplete?: boolean;
+  requiresEnhancedDd?: boolean;
+  eddCompleted?: boolean;
+  monitoringLevel?: 'standard' | 'ongoing_review' | 'enhanced' | 'blocked';
+}
+
+export interface BusinessBeneficialOwnerCreateInput {
+  firstName: string;
+  middleName?: string;
+  lastName: string;
+  dateOfBirth: string;
+  email?: string;
+  phone?: string;
+  residentialAddress?: {
+    line1: string;
+    line2?: string;
+    city: string;
+    state: string;
+    postcode: string;
+    country: string;
+  };
+  ownershipPercentage: number;
+  ownershipType: BusinessOwnershipType;
+  role?: string;
+}
+
+export interface BusinessBeneficialOwnerUpdateInput {
+  firstName?: string;
+  middleName?: string;
+  lastName?: string;
+  dateOfBirth?: string;
+  email?: string;
+  phone?: string;
+  ownershipPercentage?: number;
+  ownershipType?: BusinessOwnershipType;
+  role?: string;
+  verificationStatus?: 'unverified' | 'pending' | 'verified' | 'rejected';
+  verificationLevel?: 'none' | 'manual' | 'stripe_identity' | 'dvs_verified';
+  isPep?: boolean;
+  pepRelationship?: string;
+  isSanctioned?: boolean;
+}
+
+export interface BusinessCustomerListResponse {
+  object: 'list';
+  data: BusinessCustomer[];
+  hasMore: boolean;
+  totalCount: number;
+}
+
+export interface BusinessBeneficialOwnerListResponse {
+  object: 'list';
+  data: BusinessBeneficialOwner[];
 }

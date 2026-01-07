@@ -17,6 +17,7 @@ import {
   FolderOpen,
   FileSearch,
   Webhook,
+  UserCog,
 } from 'lucide-react';
 
 const navigation = [
@@ -31,6 +32,7 @@ const navigation = [
   { name: 'EDD Investigations', href: '/dashboard/edd', icon: FileSearch },
   { name: 'Analytics', href: '/dashboard/analytics', icon: BarChart3 },
   { name: 'Reports', href: '/dashboard/reports', icon: FileText },
+  { name: 'Staff & Training', href: '/dashboard/staff', icon: UserCog },
   { name: 'Webhooks', href: '/dashboard/webhooks', icon: Webhook },
   { name: 'Settings', href: '/dashboard/settings', icon: Settings },
 ];
