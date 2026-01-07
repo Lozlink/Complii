@@ -17,7 +17,8 @@
         "STRIPE_IDENTITY_WEBHOOK_SECRET",
         "COMPLII_API_URL",
         "COMPLII_API_KEY",
-        "RESEND_API_KEY"
+        "RESEND_API_KEY",
+        "ABR_GUID"
       ]
     },
     "lint": {

@@ -146,9 +146,10 @@ export default function EDDDetailPage() {
     }
   };
 
-  const getStatusBadge = (status: string) => {
+  const getStatusBadge = (status: string) : {bg:string; text:string} => {
+    const defaultBadge = { bg: 'bg-blue-100', text: 'text-blue-800' };
     const badges: Record<string, { bg: string; text: string }> = {
-      open: { bg: 'bg-blue-100', text: 'text-blue-800' },
+      open: defaultBadge,
       awaiting_customer_info: { bg: 'bg-yellow-100', text: 'text-yellow-800' },
       under_review: { bg: 'bg-purple-100', text: 'text-purple-800' },
       escalated: { bg: 'bg-orange-100', text: 'text-orange-800' },
@@ -156,7 +157,7 @@ export default function EDDDetailPage() {
       completed_rejected: { bg: 'bg-red-100', text: 'text-red-800' },
       completed_ongoing_monitoring: { bg: 'bg-teal-100', text: 'text-teal-800' },
     };
-    return badges[status] || badges.open;
+    return badges[status] ?? defaultBadge;
   };
 
   const formatStatus = (status: string) => {

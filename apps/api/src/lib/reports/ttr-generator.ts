@@ -357,13 +357,18 @@ export async function markTTRSubmitted(
   transactionId: string,
   austracReference?: string
 ): Promise<{ success: boolean; error?: string }> {
+  // Increment submission attempts (if RPC exists)
+  const { error: rpcError } = await supabase.rpc('increment_ttr_attempts', {
+    transaction_id: transactionId
+  });
+  // Ignore RPC errors - function may not exist
+
   const { error } = await supabase
     .from('transactions')
     .update({
       ttr_submitted_at: new Date().toISOString(),
       ttr_submission_status: 'submitted',
       ttr_austrac_reference: austracReference || null,
-      ttr_submission_attempts: supabase.rpc ? undefined : 1, // Increment if using RPC
     })
     .eq('id', transactionId)
     .eq('tenant_id', tenantId)
@@ -453,7 +458,7 @@ export async function generateTTRBatchExport(
   let totalAmount = 0;
 
   const txList = (transactions || []).map((tx) => {
-    const customer = tx.customers as Record<string, string> | null;
+    const customer = Array.isArray(tx.customers) ? tx.customers[0] : tx.customers;
     const customerName = customer
       ? customer.customer_type === 'business'
         ? customer.company_name

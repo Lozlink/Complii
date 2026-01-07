@@ -87,11 +87,15 @@ export async function generateSMRReport(
   const deadline = calculateSMRDeadline(suspicionFormedDate, config);
   // Get transactions
 
-  const { data: transactions } = await supabase
-    .from('transactions')
-    .select('*')
-    .in('id', input.transactionIds)
-    .eq('tenant_id', tenantId);
+   let transactions = null;
+   if (input.transactionIds && input.transactionIds.length > 0) {
+     const { data } = await supabase
+      .from('transactions')
+      .select('*')
+      .in('id', input.transactionIds)
+      .eq('tenant_id', tenantId);
+    transactions = data;
+  }
 
   const totalAmount = transactions?.reduce((sum, txn) => sum + txn.amount, 0) || 0;
   const currency = transactions?.[0]?.currency || 'AUD';
@@ -222,7 +226,7 @@ export async function generateSMRReport(
     entity_type: 'smr_report',
     entity_id: reportId,
     description: `SMR generated for ${input.activityType}`,
-    metadata: { reportId, customerId: input.customerId, transactionCount: input.transactionIds.length },
+    metadata: { reportId, customerId: input.customerId, transactionCount: input.transactionIds?.length },
   });
 
   return report;
@@ -253,7 +257,7 @@ export function generateSMRReportXML(data: SMRReportData): string {
   </ReportingOfficer>
   ${data.additionalInformation ? `<AdditionalInformation>${escapeXml(data.additionalInformation)}</AdditionalInformation>` : ''}
   <Transactions>
-    ${data.transactions.map((txn) => `
+    ${data.transactions?.map((txn) => `
     <Transaction>
       <Id>${escapeXml(txn.id)}</Id>
       <Date>${txn.date}</Date>
