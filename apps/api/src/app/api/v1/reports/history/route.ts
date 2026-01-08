@@ -15,7 +15,7 @@ export async function GET(request: NextRequest) {
       const reportType = searchParams.get('type'); // ttr, smr, ifti
 
       let query = supabase
-        .from('ttr_reports')
+        .from('compliance_report_history')
         .select('*', { count: 'exact' })
         .eq('tenant_id', tenant.tenantId)
         .order('generated_at', { ascending: false })
@@ -37,14 +37,14 @@ export async function GET(request: NextRequest) {
 
       // Transform data to match expected format
       const reports = (data || []).map((r) => ({
-        id: `rpt_${r.id.slice(0, 8)}`,
-        object: 'report',
-        reportNumber: r.report_number,
-        reportType: r.report_type,
-        periodStart: r.period_start,
-        periodEnd: r.period_end,
-        transactionCount: r.transaction_count,
-        totalAmount: parseFloat(r.total_amount),
+          id: `rpt_${r.id.slice(0, 8)}`,
+          object: 'report',
+          reportNumber: r.report_number,
+          reportType: r.report_type,
+          periodStart: r.period_start,
+          periodEnd: r.period_end,
+          transactionCount: r.transaction_count,
+          totalAmount: parseFloat(r.total_amount),
         status: r.status,
         generatedAt: r.generated_at,
         fileUrl: r.file_url,

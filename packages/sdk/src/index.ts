@@ -104,3 +104,23 @@ export type {
   HighRiskJurisdictions,
   ConfigResponse,
 } from './types/config';
+export type {
+  BusinessCustomer,
+  BusinessBeneficialOwner,
+  BusinessAuthorizedPerson,
+  BusinessEDD,
+  BusinessCustomerCreateInput,
+  BusinessCustomerUpdateInput,
+  BusinessBeneficialOwnerCreateInput,
+  BusinessBeneficialOwnerUpdateInput,
+  BusinessCustomerListResponse,
+  BusinessBeneficialOwnerListResponse,
+  BusinessRiskAssessment,
+  EntityType,
+  BusinessOwnershipType,
+  AuthorizationType,
+  BusinessVerificationStatus,
+  MonitoringLevel,
+  EDDStatus,
+  ABRResponse,
+} from './types/business';

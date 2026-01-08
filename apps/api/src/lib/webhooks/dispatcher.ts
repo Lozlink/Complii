@@ -15,7 +15,15 @@ export type WebhookEventType =
   | 'kyc.verification_completed'
   | 'kyc.verification_failed'
   | 'kyc.document_uploaded'
-  | 'kyc.document_reviewed';
+  | 'kyc.document_reviewed'
+  // Deadline events
+  | 'deadline.ttr_approaching'
+  | 'deadline.ttr_overdue'
+  | 'deadline.smr_approaching'
+  | 'deadline.smr_overdue'
+  // Alert events
+  | 'alert.created'
+  | 'alert.escalated';
 
 export interface WebhookEvent {
   id: string;
@@ -228,4 +236,32 @@ export async function dispatchDocumentReviewed(
   data: Record<string, unknown>
 ): Promise<void> {
   await dispatchWebhookEvent(supabase, tenantId, 'kyc.document_reviewed', data);
+}
+
+// Deadline webhook dispatch functions
+export async function dispatchDeadlineAlert(
+  supabase: SupabaseClient,
+  tenantId: string,
+  type: 'ttr' | 'smr',
+  isOverdue: boolean,
+  data: Record<string, unknown>
+): Promise<void> {
+  const eventType: WebhookEventType = isOverdue
+    ? type === 'ttr'
+      ? 'deadline.ttr_overdue'
+      : 'deadline.smr_overdue'
+    : type === 'ttr'
+      ? 'deadline.ttr_approaching'
+      : 'deadline.smr_approaching';
+
+  await dispatchWebhookEvent(supabase, tenantId, eventType, data);
+}
+
+// Alert webhook dispatch functions
+export async function dispatchAlertCreated(
+  supabase: SupabaseClient,
+  tenantId: string,
+  alert: Record<string, unknown>
+): Promise<void> {
+  await dispatchWebhookEvent(supabase, tenantId, 'alert.created', alert);
 }

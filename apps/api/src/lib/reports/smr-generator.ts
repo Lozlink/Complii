@@ -1,4 +1,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
+import {calculateSMRDeadline} from "@/lib/compliance/deadline-utils";
+import { RegionalConfig } from "@/lib/config/regions";
+import { createEDDInvestigation, escalateEDDInvestigation } from "@/lib/compliance/edd-service";
 
 export interface SMRReportData {
   reportId: string;
@@ -11,19 +14,20 @@ export interface SMRReportData {
     suspicionFormedDate: string;
     customerId?: string;
     customerName?: string;
-    transactionIds: string[];
+    transactionIds?: string[];
     totalAmount: number;
     currency: string;
   };
-  groundsForSuspicion: string;
+  suspicionGrounds: string;
   actionTaken: string;
   reportingOfficer: {
     name: string;
     position: string;
     contactNumber: string;
   };
+  submissionDeadline?: string;
   additionalInformation?: string;
-  transactions: Array<{
+  transactions?: Array<{
     id: string;
     date: string;
     amount: number;
@@ -40,13 +44,14 @@ export interface SMRReportData {
 export async function generateSMRReport(
   supabase: SupabaseClient,
   tenantId: string,
+  config: Pick<RegionalConfig, 'holidays' | 'workweek' | 'deadlines'>,
   input: {
     activityType: 'money_laundering' | 'terrorism_financing' | 'other';
     description: string;
     suspicionFormedDate: string;
     customerId?: string;
-    transactionIds: string[];
-    groundsForSuspicion: string;
+    transactionIds?: string[];
+    suspicionGrounds: string;
     actionTaken: string;
     reportingOfficer: {
       name: string;
@@ -54,6 +59,7 @@ export async function generateSMRReport(
       contactNumber: string;
     };
     additionalInformation?: string;
+    skipEddTrigger?: boolean; // Override to prevent auto-triggering EDD
   }
 ): Promise<SMRReportData> {
   // Get tenant details
@@ -77,13 +83,19 @@ export async function generateSMRReport(
       customerName = `${customer.first_name} ${customer.last_name}`;
     }
   }
-
+  const suspicionFormedDate = new Date(input.suspicionFormedDate);
+  const deadline = calculateSMRDeadline(suspicionFormedDate, config);
   // Get transactions
-  const { data: transactions } = await supabase
-    .from('transactions')
-    .select('*')
-    .in('id', input.transactionIds)
-    .eq('tenant_id', tenantId);
+
+   let transactions = null;
+   if (input.transactionIds && input.transactionIds.length > 0) {
+     const { data } = await supabase
+      .from('transactions')
+      .select('*')
+      .in('id', input.transactionIds)
+      .eq('tenant_id', tenantId);
+    transactions = data;
+  }
 
   const totalAmount = transactions?.reduce((sum, txn) => sum + txn.amount, 0) || 0;
   const currency = transactions?.[0]?.currency || 'AUD';
@@ -99,13 +111,15 @@ export async function generateSMRReport(
       type: input.activityType,
       description: input.description,
       suspicionFormedDate: input.suspicionFormedDate,
+
       customerId: input.customerId,
       customerName,
       transactionIds: input.transactionIds,
       totalAmount,
       currency,
     },
-    groundsForSuspicion: input.groundsForSuspicion,
+    suspicionGrounds: input.suspicionGrounds,
+    submissionDeadline: deadline.toISOString(),
     actionTaken: input.actionTaken,
     reportingOfficer: input.reportingOfficer,
     additionalInformation: input.additionalInformation,
@@ -125,21 +139,85 @@ export async function generateSMRReport(
   };
 
   // Store SMR in database
-  await supabase.from('smr_reports').insert({
+  const { error: insertError } = await supabase.from('smr_reports').insert({
     tenant_id: tenantId,
-    report_id: reportId,
-    activity_type: input.activityType,
+    report_number: reportId,
+    report_type: input.activityType,
     customer_id: input.customerId,
     suspicion_formed_date: input.suspicionFormedDate,
-    grounds_for_suspicion: input.groundsForSuspicion,
+    suspicion_grounds: input.suspicionGrounds,
+    submission_deadline: deadline.toISOString(),
     action_taken: input.actionTaken,
     reporting_officer: input.reportingOfficer,
     transaction_ids: input.transactionIds,
     total_amount: totalAmount,
     currency,
-    report_data: report,
+    description: input.description,
+    subjects: [],
     status: 'draft',
   });
+
+  if (insertError) {
+    console.error('Failed to insert SMR report:', insertError);
+    throw new Error(`Failed to save SMR report: ${insertError.message}`);
+  }
+
+  // AUTO-TRIGGER EDD INVESTIGATION if customer is linked
+  if (input.customerId && !input.skipEddTrigger) {
+    const shouldAutoTriggerEDD = [
+      'money_laundering',
+      'terrorism_financing',
+      'fraud',
+    ].includes(input.activityType);
+
+    if (shouldAutoTriggerEDD) {
+      // Check for existing open EDD investigation
+      const { data: existingEdd } = await supabase
+        .from('edd_investigations')
+        .select('id, investigation_number, status')
+        .eq('customer_id', input.customerId)
+        .eq('tenant_id', tenantId)
+        .in('status', ['open', 'awaiting_customer_info', 'under_review', 'escalated'])
+        .maybeSingle();
+
+      if (existingEdd) {
+        // Escalate existing EDD investigation
+        console.log(`Escalating existing EDD ${existingEdd.investigation_number} due to SMR ${reportId}`);
+        await escalateEDDInvestigation(supabase, tenantId, existingEdd.id, {
+          reason: `SMR ${reportId} filed for ${input.activityType}: ${input.description.substring(0, 100)}`,
+          escalatedBy: 'system',
+        });
+      } else {
+        // Create new EDD investigation
+        console.log(`Auto-triggering EDD investigation for customer ${input.customerId} due to SMR ${reportId}`);
+        const eddResult = await createEDDInvestigation(supabase, tenantId, {
+          customerId: input.customerId,
+          transactionId: input.transactionIds?.[0] || null, // Link primary transaction
+          triggerReason: `Automatic: SMR filed for ${input.activityType} - ${input.suspicionGrounds.substring(0, 150)}`,
+          triggeredBy: 'system',
+        });
+
+        if (eddResult.success) {
+          // Link SMR to EDD investigation
+          await supabase
+            .from('smr_reports')
+            .update({ metadata: { edd_investigation_id: eddResult.investigation?.id } })
+            .eq('id', reportId)
+            .eq('tenant_id', tenantId);
+        }
+      }
+
+      // Update customer risk profile to high risk
+      await supabase
+        .from('customers')
+        .update({
+          requires_edd: true,
+          risk_level: 'high',
+        })
+        .eq('id', input.customerId)
+        .eq('tenant_id', tenantId);
+    }
+  }
 
   // Log audit event
   await supabase.from('audit_logs').insert({
@@ -148,7 +226,7 @@ export async function generateSMRReport(
     entity_type: 'smr_report',
     entity_id: reportId,
     description: `SMR generated for ${input.activityType}`,
-    metadata: { reportId, customerId: input.customerId, transactionCount: input.transactionIds.length },
+    metadata: { reportId, customerId: input.customerId, transactionCount: input.transactionIds?.length },
   });
 
   return report;
@@ -170,7 +248,7 @@ export function generateSMRReportXML(data: SMRReportData): string {
     ${data.suspectedActivity.customerName ? `<CustomerName>${escapeXml(data.suspectedActivity.customerName)}</CustomerName>` : ''}
     <TotalAmount currency="${data.suspectedActivity.currency}">${data.suspectedActivity.totalAmount}</TotalAmount>
   </SuspectedActivity>
-  <GroundsForSuspicion>${escapeXml(data.groundsForSuspicion)}</GroundsForSuspicion>
+  <GroundsForSuspicion>${escapeXml(data.suspicionGrounds)}</GroundsForSuspicion>
   <ActionTaken>${escapeXml(data.actionTaken)}</ActionTaken>
   <ReportingOfficer>
     <Name>${escapeXml(data.reportingOfficer.name)}</Name>
@@ -179,7 +257,7 @@ export function generateSMRReportXML(data: SMRReportData): string {
   </ReportingOfficer>
   ${data.additionalInformation ? `<AdditionalInformation>${escapeXml(data.additionalInformation)}</AdditionalInformation>` : ''}
   <Transactions>
-    ${data.transactions.map((txn) => `
+    ${data.transactions?.map((txn) => `
     <Transaction>
       <Id>${escapeXml(txn.id)}</Id>
       <Date>${txn.date}</Date>

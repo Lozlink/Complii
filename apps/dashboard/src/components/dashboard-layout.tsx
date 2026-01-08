@@ -12,8 +12,12 @@ import {
   Settings,
   UserCheck,
   AlertTriangle,
+  AlertCircle,
   BarChart3,
   FolderOpen,
+  FileSearch,
+  Webhook,
+  UserCog,
 } from 'lucide-react';
 
 const navigation = [
@@ -24,9 +28,12 @@ const navigation = [
   { name: 'Documents', href: '/dashboard/documents', icon: FolderOpen },
   { name: 'Sanctions Screening', href: '/dashboard/sanctions', icon: Shield },
   { name: 'PEP Screening', href: '/dashboard/pep', icon: AlertTriangle },
+  { name: 'Alerts', href: '/dashboard/alerts', icon: AlertCircle },
+  { name: 'EDD Investigations', href: '/dashboard/edd', icon: FileSearch },
   { name: 'Analytics', href: '/dashboard/analytics', icon: BarChart3 },
   { name: 'Reports', href: '/dashboard/reports', icon: FileText },
-  { name: 'Webhooks', href: '/dashboard/webhooks', icon: Bell },
+  { name: 'Staff & Training', href: '/dashboard/staff', icon: UserCog },
+  { name: 'Webhooks', href: '/dashboard/webhooks', icon: Webhook },
   { name: 'Settings', href: '/dashboard/settings', icon: Settings },
 ];
 

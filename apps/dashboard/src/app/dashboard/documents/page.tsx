@@ -46,19 +46,24 @@ interface StatusBadge {
   icon: LucideIcon;
 }
 
-const DOCUMENT_TYPES = [
-  { value: 'passport', label: 'Passport' },
-  { value: 'drivers_license', label: "Driver's License" },
-  { value: 'national_id', label: 'National ID' },
-  { value: 'birth_certificate', label: 'Birth Certificate' },
-  { value: 'citizenship_certificate', label: 'Citizenship Certificate' },
-  { value: 'medicare_card', label: 'Medicare Card' },
-  { value: 'proof_of_age', label: 'Proof of Age Card' },
-  { value: 'utility_bill', label: 'Utility Bill' },
-  { value: 'bank_statement', label: 'Bank Statement' },
-  { value: 'tax_return', label: 'Tax Return' },
-  { value: 'other', label: 'Other' },
-];
+const DOCUMENT_TYPES = {
+  primary_photo: [
+    { value: 'passport', label: 'Passport', description: 'Australian or foreign passport' },
+    { value: 'drivers_license', label: "Driver's License", description: 'Australian license (front & back)' },
+    { value: 'proof_of_age_card', label: 'Proof of Age Card', description: 'State/territory issued' },
+  ],
+  primary_non_photo: [
+    { value: 'birth_certificate', label: 'Birth Certificate', description: 'Australian or foreign' },
+    { value: 'citizenship_certificate', label: 'Citizenship Certificate', description: 'Australian citizenship' },
+    { value: 'pension_card', label: 'Pension/Concession Card', description: 'Government issued' },
+  ],
+  secondary: [
+    { value: 'medicare_card', label: 'Medicare Card', description: 'Current Australian Medicare card' },
+    { value: 'bank_statement', label: 'Bank Statement', description: 'Less than 12 months old' },
+    { value: 'utility_bill', label: 'Utility Bill', description: 'Electricity, gas, water, phone (< 3 months)' },
+    { value: 'council_rates', label: 'Council Rates Notice', description: 'Recent rates notice' },
+  ],
+};
 
 function DocumentsContent() {
   const searchParams = useSearchParams();
@@ -80,6 +85,14 @@ function DocumentsContent() {
 
   const [deletingDoc, setDeletingDoc] = useState<string | null>(null);
   const [downloadingDoc, setDownloadingDoc] = useState<string | null>(null);
+
+  const [isCertified, setIsCertified] = useState(false);
+  const [certifierName, setCertifierName] = useState('');
+  const [certifierType, setCertifierType] = useState('');
+  const [certifierRegistration, setCertifierRegistration] = useState('');
+  const [certificationDate, setCertificationDate] = useState('');
+  const [showCertificationInfo, setShowCertificationInfo] = useState(false);
+
 
   // Fetch customers list
   const fetchCustomers = useCallback(async () => {
@@ -139,6 +152,17 @@ function DocumentsContent() {
       formData.append('documentType', uploadDocType);
       if (uploadDocNumber) formData.append('documentNumber', uploadDocNumber);
       if (uploadExpiryDate) formData.append('expiryDate', uploadExpiryDate);
+      
+      // Add certification data if document is certified
+      if (isCertified) {
+        formData.append('isCertified', 'true');
+        formData.append('certifierName', certifierName);
+        formData.append('certifierType', certifierType);
+        formData.append('certificationDate', certificationDate);
+        if (certifierRegistration) {
+          formData.append('certifierRegistration', certifierRegistration);
+        }
+      }
 
       const response = await fetch(
         `/api/proxy/customers/${selectedCustomerId}/kyc/documents`,
@@ -154,6 +178,11 @@ function DocumentsContent() {
         setUploadDocType('passport');
         setUploadDocNumber('');
         setUploadExpiryDate('');
+        setIsCertified(false);
+        setCertifierName('');
+        setCertifierType('');
+        setCertifierRegistration('');
+        setCertificationDate('');
         await fetchDocuments();
         alert('Document uploaded successfully!');
       } else {
@@ -324,7 +353,7 @@ function DocumentsContent() {
                     onChange={(e) => setUploadDocType(e.target.value)}
                     className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent"
                   >
-                    {DOCUMENT_TYPES.map((type) => (
+                    {Object.values(DOCUMENT_TYPES).flat().map((type) => (
                       <option key={type.value} value={type.value}>
                         {type.label}
                       </option>
@@ -355,6 +384,121 @@ function DocumentsContent() {
                     onChange={(e) => setUploadExpiryDate(e.target.value)}
                     className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent"
                   />
+                </div>
+
+                {/* Certification Section */}
+                <div className="border-t pt-4 mt-4">
+                  <div className="flex items-start mb-3">
+                    <input
+                      type="checkbox"
+                      id="isCertified"
+                      checked={isCertified}
+                      onChange={(e) => setIsCertified(e.target.checked)}
+                      className="mt-1 h-4 w-4 text-primary focus:ring-primary border-gray-300 rounded"
+                    />
+                    <label htmlFor="isCertified" className="ml-2 block text-sm font-medium text-gray-700">
+                      This document has been certified by an authorized person
+                    </label>
+                  </div>
+
+                  {isCertified && (
+                    <>
+                      <div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded-lg text-sm text-blue-800">
+                        <p className="font-medium mb-1">AUSTRAC Certification Requirements</p>
+                        <p>Documents must be certified by an authorized person (JP, Lawyer, Doctor, Accountant, etc.) within the last 3 months.</p>
+                        <button
+                          type="button"
+                          onClick={() => setShowCertificationInfo(true)}
+                          className="mt-2 text-blue-600 underline hover:text-blue-800"
+                        >
+                          View full list of authorized certifiers
+                        </button>
+                      </div>
+
+                      <div className="space-y-3">
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-2">
+                            Certifier Name *
+                          </label>
+                          <input
+                            type="text"
+                            value={certifierName}
+                            onChange={(e) => setCertifierName(e.target.value)}
+                            placeholder="e.g., John Smith"
+                            className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent"
+                            required={isCertified}
+                          />
+                        </div>
+
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-2">
+                            Certifier Type *
+                          </label>
+                          <select
+                            value={certifierType}
+                            onChange={(e) => setCertifierType(e.target.value)}
+                            className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent"
+                            required={isCertified}
+                          >
+                            <option value="">-- Select certifier type --</option>
+                            <option value="justice_of_peace">Justice of the Peace</option>
+                            <option value="lawyer">Lawyer</option>
+                            <option value="solicitor">Solicitor</option>
+                            <option value="barrister">Barrister</option>
+                            <option value="doctor">Medical Practitioner</option>
+                            <option value="dentist">Dentist</option>
+                            <option value="pharmacist">Pharmacist</option>
+                            <option value="veterinarian">Veterinarian</option>
+                            <option value="nurse">Registered Nurse</option>
+                            <option value="optometrist">Optometrist</option>
+                            <option value="chiropractor">Chiropractor</option>
+                            <option value="physiotherapist">Physiotherapist</option>
+                            <option value="accountant">Chartered Accountant</option>
+                            <option value="teacher">Registered Teacher</option>
+                            <option value="police_officer">Police Officer</option>
+                            <option value="engineer">Professional Engineer</option>
+                            <option value="bank_officer">Bank Officer</option>
+                            <option value="post_office_employee">Post Office Employee</option>
+                            <option value="minister_of_religion">Minister of Religion</option>
+                          </select>
+                        </div>
+
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-2">
+                            Registration Number {['lawyer', 'solicitor', 'barrister', 'doctor', 'dentist', 'pharmacist', 'nurse', 'accountant', 'engineer', 'optometrist', 'chiropractor', 'physiotherapist', 'veterinarian'].includes(certifierType) && '*'}
+                          </label>
+                          <input
+                            type="text"
+                            value={certifierRegistration}
+                            onChange={(e) => setCertifierRegistration(e.target.value)}
+                            placeholder="Professional registration number"
+                            className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent"
+                            required={isCertified && ['lawyer', 'solicitor', 'barrister', 'doctor', 'dentist', 'pharmacist', 'nurse', 'accountant', 'engineer', 'optometrist', 'chiropractor', 'physiotherapist', 'veterinarian'].includes(certifierType)}
+                          />
+                          <p className="text-xs text-gray-500 mt-1">
+                            Required for certain professions (lawyers, doctors, accountants, etc.)
+                          </p>
+                        </div>
+
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-2">
+                            Certification Date *
+                          </label>
+                          <input
+                            type="date"
+                            value={certificationDate}
+                            onChange={(e) => setCertificationDate(e.target.value)}
+                            max={new Date().toISOString().split('T')[0]}
+                            className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent"
+                            required={isCertified}
+                          />
+                          <p className="text-xs text-gray-500 mt-1">
+                            Must be within the last 3 months
+                          </p>
+                        </div>
+                      </div>
+                    </>
+                  )}
                 </div>
 
                 <div className="flex justify-end space-x-3 pt-4">
@@ -592,6 +736,85 @@ function DocumentsContent() {
             </div>
           </CardContent>
         </Card>
+      )}
+
+      {/* Certification Info Modal */}
+      {showCertificationInfo && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+          <Card className="w-full max-w-2xl mx-4 max-h-[80vh] overflow-y-auto">
+            <CardHeader>
+              <div className="flex items-center justify-between">
+                <CardTitle>Authorized Certifiers (AUSTRAC)</CardTitle>
+                <button
+                  onClick={() => setShowCertificationInfo(false)}
+                  className="p-1 hover:bg-gray-100 rounded"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-4">
+                <p className="text-sm text-gray-700">
+                  Documents must be certified by one of the following authorized persons:
+                </p>
+                
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                  <div className="p-3 bg-gray-50 rounded-lg">
+                    <h4 className="font-medium text-sm mb-2">Legal Professionals</h4>
+                    <ul className="text-sm text-gray-700 space-y-1">
+                      <li>• Justice of the Peace</li>
+                      <li>• Lawyer / Solicitor / Barrister</li>
+                    </ul>
+                  </div>
+
+                  <div className="p-3 bg-gray-50 rounded-lg">
+                    <h4 className="font-medium text-sm mb-2">Medical Professionals</h4>
+                    <ul className="text-sm text-gray-700 space-y-1">
+                      <li>• Medical Practitioner</li>
+                      <li>• Dentist</li>
+                      <li>• Pharmacist</li>
+                      <li>• Veterinarian</li>
+                      <li>• Registered Nurse</li>
+                      <li>• Optometrist</li>
+                      <li>• Chiropractor</li>
+                      <li>• Physiotherapist</li>
+                    </ul>
+                  </div>
+
+                  <div className="p-3 bg-gray-50 rounded-lg">
+                    <h4 className="font-medium text-sm mb-2">Other Professionals</h4>
+                    <ul className="text-sm text-gray-700 space-y-1">
+                      <li>• Chartered Accountant</li>
+                      <li>• Professional Engineer</li>
+                      <li>• Registered Teacher</li>
+                      <li>• Police Officer</li>
+                    </ul>
+                  </div>
+
+                  <div className="p-3 bg-gray-50 rounded-lg">
+                    <h4 className="font-medium text-sm mb-2">Financial Services</h4>
+                    <ul className="text-sm text-gray-700 space-y-1">
+                      <li>• Bank Officer</li>
+                      <li>• Post Office Employee</li>
+                      <li>• Minister of Religion</li>
+                    </ul>
+                  </div>
+                </div>
+
+                <div className="p-4 bg-blue-50 border border-blue-200 rounded-lg">
+                  <h4 className="font-medium text-sm text-blue-900 mb-2">Important Requirements:</h4>
+                  <ul className="text-sm text-blue-800 space-y-1">
+                    <li>• Certification must be dated within the last 3 months</li>
+                    <li>• Certifier must include their full name and qualification</li>
+                    <li>• Certain professions require a registration number</li>
+                    <li>• The certifier must have known you for at least 12 months OR verified your identity</li>
+                  </ul>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
       )}
     </div>
   );

@@ -28,11 +28,12 @@ import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 
 interface ActionItem {
   id: string;
-  type: 'kyc' | 'documents' | 'sanctions' | 'pep' | 'transactions';
+  type: 'kyc' | 'documents' | 'sanctions' | 'pep' | 'transactions' | 'smr' | 'edd';
   priority: 'high' | 'medium';
   title: string;
   description: string;
   count?: number;
+  metadata?: Record<string, unknown>;
 }
 
 interface KycVerification {
@@ -104,7 +105,9 @@ interface Transaction {
 
 export default function CustomerDetailPage() {
   const params = useParams();
-  const customerId = params.id as string;
+  const customerIdParam = params.id as string;
+  // Strip cus_ prefix to get actual UUID for DB queries
+  const customerId = customerIdParam.startsWith('cus_') ? customerIdParam.slice(4) : customerIdParam;
 
   const [customer, setCustomer] = useState<Customer | null>(null);
   const [transactions, setTransactions] = useState<Transaction[]>([]);
@@ -166,12 +169,14 @@ export default function CustomerDetailPage() {
       const items: ActionItem[] = [];
 
       // Fetch all data in parallel
-      const [kycRes, docsRes, sanctionsRes, pepRes, flaggedRes] = await Promise.all([
+      const [kycRes, docsRes, sanctionsRes, pepRes, flaggedRes, smrRes, eddRes] = await Promise.all([
         fetch(`/api/proxy/customers/${customerId}/kyc`).catch(() => null),
         fetch(`/api/proxy/customers/${customerId}/kyc/documents?limit=20`).catch(() => null),
         fetch(`/api/proxy/sanctions/history?customer_id=${customerId}&status=potential_match&limit=5`).catch(() => null),
         fetch(`/api/proxy/pep/history?customer_id=${customerId}&status=potential_match&limit=5`).catch(() => null),
         fetch(`/api/proxy/transactions?customer_id=${customerId}&status=flagged&limit=10`).catch(() => null),
+        fetch(`/api/proxy/reports/smr?limit=10`).catch(() => null),
+        fetch(`/api/proxy/edd?customerId=${customerId}&limit=10`).catch(() => null),
       ]);
 
       // Check KYC verification needing review and get documents
@@ -266,6 +271,53 @@ export default function CustomerDetailPage() {
         }
       }
 
+      // Check SMR reports
+      if (smrRes?.ok) {
+        const smrData = await smrRes.json();
+        console.log('[Customer Page] SMR data:', smrData);
+        const smrReports = (smrData.data || []).filter((smr: { customerId?: string }) => smr.customerId === customerId);
+        console.log('[Customer Page] Filtered SMR reports for customer:', customerId, smrReports);
+        
+        smrReports.forEach((smr: { id: string; reportNumber: string; activityType: string; status: string }) => {
+          items.push({
+            id: smr.id,
+            type: 'smr',
+            priority: 'high',
+            title: `SMR: ${smr.activityType.replace(/_/g, ' ')}`,
+            description: `Report ${smr.reportNumber} - Status: ${smr.status}`,
+            metadata: { reportNumber: smr.reportNumber, status: smr.status },
+          });
+        });
+      } else {
+        console.log('[Customer Page] SMR fetch failed or not ok:', smrRes?.status);
+      }
+
+      // Check EDD investigations
+      if (eddRes?.ok) {
+        const eddData = await eddRes.json();
+        console.log('[Customer Page] EDD data:', eddData);
+        const eddInvestigations = (eddData.data || []).filter((edd: { customerId?: string }) => edd.customerId === customerId);
+        console.log('[Customer Page] Filtered EDD investigations for customer:', customerId, eddInvestigations);
+        const openEdds = eddInvestigations.filter((edd: { status: string }) => 
+          ['open', 'awaiting_customer_info', 'under_review', 'escalated'].includes(edd.status)
+        );
+
+        if (openEdds.length > 0) {
+          const edd = openEdds[0];
+          items.push({
+            id: edd.id,
+            type: 'edd',
+            priority: 'high',
+            title: `EDD Investigation: ${edd.status.replace(/_/g, ' ')}`,
+            description: edd.triggerReason || 'Enhanced due diligence required',
+            metadata: { investigationNumber: edd.investigationNumber },
+          });
+        }
+      } else {
+        console.log('[Customer Page] EDD fetch failed or not ok:', eddRes?.status);
+      }
+
+      console.log('[Customer Page] Final action items:', items);
       setActionItems(items);
     } catch (err) {
       console.error('Failed to fetch action items:', err);
@@ -596,6 +648,8 @@ export default function CustomerDetailPage() {
                     case 'sanctions': return Shield;
                     case 'pep': return AlertTriangle;
                     case 'transactions': return Flag;
+                    case 'smr': return FileText;
+                    case 'edd': return AlertTriangle;
                     default: return Clock;
                   }
                 };
@@ -767,6 +821,22 @@ export default function CustomerDetailPage() {
                           className="flex items-center px-3 py-1.5 text-xs font-medium bg-white border border-gray-300 rounded hover:bg-gray-50"
                         >
                           Review <ChevronRight className="w-3 h-3 ml-1" />
+                        </Link>
+                      )}
+                      {item.type === 'smr' && (
+                        <Link
+                          href="/dashboard/reports"
+                          className="flex items-center px-3 py-1.5 text-xs font-medium bg-white border border-gray-300 rounded hover:bg-gray-50"
+                        >
+                          View Report <ChevronRight className="w-3 h-3 ml-1" />
+                        </Link>
+                      )}
+                      {item.type === 'edd' && (
+                        <Link
+                          href={`/dashboard/edd/${item.id}`}
+                          className="flex items-center px-3 py-1.5 text-xs font-medium bg-white border border-gray-300 rounded hover:bg-gray-50"
+                        >
+                          View Investigation <ChevronRight className="w-3 h-3 ml-1" />
                         </Link>
                       )}
                     </div>
