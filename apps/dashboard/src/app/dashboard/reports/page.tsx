@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
+import Link from 'next/link';
 import { FileText, Download, Calendar, AlertCircle, RefreshCw, Send } from 'lucide-react';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 
@@ -771,7 +772,12 @@ export default function ReportsPage() {
                       {smrReports.map((report) => (
                         <tr key={report.id} className="hover:bg-gray-50">
                           <td className="px-6 py-4 text-sm font-medium text-gray-900">
-                            {report.reportNumber || report.id}
+                            <Link
+                              href={`/dashboard/reports/smr/${report.id}`}
+                              className="text-primary hover:underline"
+                            >
+                              {report.reportNumber || report.id}
+                            </Link>
                           </td>
                           <td className="px-6 py-4 text-sm text-gray-500">
                             {report.customerName ? (

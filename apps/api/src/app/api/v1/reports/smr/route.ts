@@ -3,6 +3,7 @@ import { getServiceClient } from '@/lib/db/client';
 import { withAuth, AuthenticatedRequest } from '@/lib/auth/middleware';
 import { generateSMRReport, generateSMRReportXML } from '@/lib/reports/smr-generator';
 import {getTenantConfig, RegionalConfig} from "@/lib/config/regions";
+import { dispatchAlertCreated } from '@/lib/webhooks/dispatcher';
 
 function extractCustomerId(idParam: string): string {
   return idParam.startsWith('cus_') ? idParam.slice(4) : idParam;
@@ -72,6 +73,65 @@ export async function POST(request: NextRequest) {
         additionalInformation,
         skipEddTrigger,
       });
+
+      // Create alert for SMR creation
+      try {
+        // Get the alert rule
+        const { data: rule } = await supabase
+          .from('alert_rules')
+          .select('*')
+          .eq('tenant_id', tenant.tenantId)
+          .eq('rule_code', 'SMR_CREATED')
+          .eq('is_enabled', true)
+          .maybeSingle();
+
+        if (rule && report.customerId) {
+          // Generate alert number
+          const today = new Date().toISOString().slice(0, 10).replace(/-/g, '');
+          const { count } = await supabase
+            .from('alerts')
+            .select('*', { count: 'exact', head: true })
+            .eq('tenant_id', tenant.tenantId)
+            .gte('created_at', new Date().toISOString().slice(0, 10));
+
+          const alertNumber = `ALT-${today}-${String((count || 0) + 1).padStart(4, '0')}`;
+
+          // Create alert
+          const { data: alert } = await supabase
+            .from('alerts')
+            .insert({
+              tenant_id: tenant.tenantId,
+              alert_rule_id: rule.id,
+              alert_number: alertNumber,
+              title: `SMR ${report.reportId} created - requires submission`,
+              description: `Suspicious Matter Report ${report.reportId} has been created and must be submitted to AUSTRAC by ${new Date(report.submissionDeadline).toLocaleDateString()}. Activity type: ${activityType.replace(/_/g, ' ')}.`,
+              severity: rule.severity || 'critical',
+              status: 'open',
+              entity_type: 'customer',
+              entity_id: report.customerId,
+              customer_id: report.customerId,
+              metadata: {
+                smrReportId: report.reportId,
+                activityType,
+                suspicionFormedDate,
+                submissionDeadline: report.submissionDeadline,
+                transactionCount: transactionIds?.length || 0,
+              },
+            })
+            .select()
+            .single();
+
+          // Dispatch webhook
+          if (alert) {
+            await dispatchAlertCreated(supabase, tenant.tenantId, alert).catch((err) => {
+              console.error('Failed to dispatch SMR alert webhook:', err);
+            });
+          }
+        }
+      } catch (alertError) {
+        console.error('Failed to create alert for SMR:', alertError);
+        // Don't fail the SMR creation if alert fails
+      }
 
       // Return in requested format
       if (format === 'xml') {

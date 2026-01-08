@@ -1,5 +1,5 @@
 import { SupabaseClient } from '@supabase/supabase-js';
-import { dispatchWebhookEvent } from '../webhooks/dispatcher';
+import { dispatchWebhookEvent, dispatchAlertCreated } from '../webhooks/dispatcher';
 
 export interface EDDInvestigation {
   id: string;
@@ -126,6 +126,63 @@ export async function createEDDInvestigation(
       triggered_by: triggeredBy,
     },
   });
+
+  // Create alert for EDD investigation
+  try {
+    const { data: rule } = await supabase
+      .from('alert_rules')
+      .select('*')
+      .eq('tenant_id', tenantId)
+      .eq('rule_code', 'EDD_TRIGGERED')
+      .eq('is_enabled', true)
+      .maybeSingle();
+
+    if (rule) {
+      // Generate alert number
+      const today = new Date().toISOString().slice(0, 10).replace(/-/g, '');
+      const { count } = await supabase
+        .from('alerts')
+        .select('*', { count: 'exact', head: true })
+        .eq('tenant_id', tenantId)
+        .gte('created_at', new Date().toISOString().slice(0, 10));
+
+      const alertNumber = `ALT-${today}-${String((count || 0) + 1).padStart(4, '0')}`;
+
+      // Create alert
+      const { data: alert } = await supabase
+        .from('alerts')
+        .insert({
+          tenant_id: tenantId,
+          alert_rule_id: rule.id,
+          alert_number: alertNumber,
+          title: `EDD investigation ${investigation.investigation_number} opened`,
+          description: `Enhanced Due Diligence investigation triggered: ${triggerReason}. Customer information must be collected and reviewed.`,
+          severity: rule.severity || 'high',
+          status: 'open',
+          entity_type: 'customer',
+          entity_id: customerId,
+          customer_id: customerId,
+          metadata: {
+            investigationNumber: investigation.investigation_number,
+            triggerReason,
+            triggeredBy,
+            transactionId,
+          },
+        })
+        .select()
+        .single();
+
+      // Dispatch alert webhook
+      if (alert) {
+        await dispatchAlertCreated(supabase, tenantId, alert).catch((err) => {
+          console.error('Failed to dispatch EDD alert webhook:', err);
+        });
+      }
+    }
+  } catch (alertError) {
+    console.error('Failed to create alert for EDD investigation:', alertError);
+    // Don't fail the EDD creation if alert fails
+  }
 
   // Dispatch webhook
   await dispatchWebhookEvent(supabase, tenantId, 'customer.created', {

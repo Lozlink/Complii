@@ -825,7 +825,7 @@ export default function CustomerDetailPage() {
                       )}
                       {item.type === 'smr' && (
                         <Link
-                          href="/dashboard/reports"
+                          href={`/dashboard/reports/smr/${item.id}`}
                           className="flex items-center px-3 py-1.5 text-xs font-medium bg-white border border-gray-300 rounded hover:bg-gray-50"
                         >
                           View Report <ChevronRight className="w-3 h-3 ml-1" />

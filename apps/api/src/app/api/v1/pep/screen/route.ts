@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { withAuth, AuthenticatedRequest } from '@/lib/auth/middleware';
 import { getServiceClient } from '@/lib/db/client';
+import { dispatchAlertCreated } from '@/lib/webhooks/dispatcher';
 
 // Simulated PEP database - in production, integrate with actual PEP databases
 const PEP_DATABASE = [
@@ -138,6 +139,91 @@ export async function POST(request: NextRequest) {
           .update({ is_pep: true })
           .eq('tenant_id', tenant.tenantId)
           .ilike('id', `${parsedCustomerId}%`);
+
+        // Create alert for PEP detection
+        try {
+          const { data: rule } = await supabase
+            .from('alert_rules')
+            .select('*')
+            .eq('tenant_id', tenant.tenantId)
+            .eq('rule_code', 'PEP_DETECTION')
+            .eq('is_enabled', true)
+            .maybeSingle();
+
+          if (rule) {
+            // Generate alert number
+            const today = new Date().toISOString().slice(0, 10).replace(/-/g, '');
+            const { count } = await supabase
+              .from('alerts')
+              .select('*', { count: 'exact', head: true })
+              .eq('tenant_id', tenant.tenantId)
+              .gte('created_at', new Date().toISOString().slice(0, 10));
+
+            const alertNumber = `ALT-${today}-${String((count || 0) + 1).padStart(4, '0')}`;
+
+            // Create alert
+            const { data: alert } = await supabase
+              .from('alerts')
+              .insert({
+                tenant_id: tenant.tenantId,
+                alert_rule_id: rule.id,
+                alert_number: alertNumber,
+                title: `PEP detected: ${fullName}`,
+                description: `Customer identified as Politically Exposed Person: ${topMatch.name} (${topMatch.position}, ${topMatch.country}). Match confidence: ${(topMatch.matchScore * 100).toFixed(0)}%. Enhanced due diligence required.`,
+                severity: rule.severity || 'high',
+                status: 'open',
+                entity_type: 'customer',
+                entity_id: parsedCustomerId,
+                customer_id: parsedCustomerId,
+                metadata: {
+                  screeningId,
+                  matchedName: topMatch.name,
+                  matchedPosition: topMatch.position,
+                  matchedCountry: topMatch.country,
+                  matchScore: topMatch.matchScore,
+                  category: topMatch.category,
+                  riskLevel: topMatch.riskLevel,
+                },
+              })
+              .select()
+              .single();
+
+            // Dispatch webhook
+            if (alert) {
+              await dispatchAlertCreated(supabase, tenant.tenantId, alert).catch((err) => {
+                console.error('Failed to dispatch PEP alert webhook:', err);
+              });
+            }
+
+            // Auto-create case if rule configured
+            if (rule.auto_create_case && alert) {
+              const caseNumber = `CASE-${today}-${String((count || 0) + 1).padStart(4, '0')}`;
+              await supabase.from('cases').insert({
+                tenant_id: tenant.tenantId,
+                case_number: caseNumber,
+                case_type: rule.case_type || 'pep_review',
+                priority: rule.case_priority || 'high',
+                status: 'open',
+                title: `PEP Review: ${fullName}`,
+                description: alert.description,
+                customer_id: parsedCustomerId,
+                assigned_to: null,
+                metadata: {
+                  alertId: alert.id,
+                  screeningId,
+                },
+              });
+
+              await supabase
+                .from('alerts')
+                .update({ status: 'escalated' })
+                .eq('id', alert.id);
+            }
+          }
+        } catch (alertError) {
+          console.error('Failed to create alert for PEP detection:', alertError);
+          // Don't fail the screening if alert fails
+        }
       }
 
       return NextResponse.json({

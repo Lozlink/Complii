@@ -182,12 +182,62 @@ export async function POST(request: NextRequest) {
         api_key_prefix: tenant.apiKeyPrefix,
       });
 
+      // Run compliance checks on successfully created transactions
+      const createdTxIds = results
+        .filter((r) => r.status === 'created' && r.id)
+        .map((r) => r.id!.replace('txn_', ''))
+        .map((shortId) => {
+          // Find the full UUID from the created transactions
+          const matchedResult = results.find((res) => res.id === `txn_${shortId}`);
+          return matchedResult?.id || shortId;
+        });
+
+      if (createdTxIds.length > 0) {
+        // Run compliance checks asynchronously (don't wait for completion)
+        // Import dynamically to avoid circular dependencies
+        import('@/lib/compliance/batch-processor')
+          .then(({ runBatchCompliance }) => {
+            // Extract full UUIDs from short IDs
+            const fullIds = results
+              .filter((r) => r.status === 'created')
+              .map((r) => {
+                // Get the original transaction ID from the database
+                const externalId = transactions.find((tx) => tx.externalId === r.externalId)?.externalId;
+                return externalId;
+              })
+              .filter((id): id is string => Boolean(id));
+
+            // Get actual UUIDs from database
+            return supabase
+              .from('transactions')
+              .select('id')
+              .in('external_id', fullIds.length > 0 ? fullIds : ['__none__'])
+              .eq('tenant_id', tenant.tenantId)
+              .then(({ data }) => {
+                const uuids = data?.map((tx) => tx.id) || [];
+                if (uuids.length > 0) {
+                  return runBatchCompliance(supabase, tenant.tenantId, uuids);
+                }
+                return null;
+              });
+          })
+          .then((complianceResult) => {
+            if (complianceResult) {
+              console.log('Batch compliance processing completed:', complianceResult);
+            }
+          })
+          .catch((error) => {
+            console.error('Batch compliance processing failed:', error);
+          });
+      }
+
       return NextResponse.json({
         object: 'batch_result',
         succeeded,
         failed,
         total: transactions.length,
         results,
+        complianceProcessing: createdTxIds.length > 0 ? 'running' : 'skipped',
       });
     } catch (error) {
       console.error('Batch transaction create error:', error);

@@ -41,4 +41,85 @@ export class TransactionsResource {
   async list(params?: TransactionListParams): Promise<PaginatedResponse<Transaction>> {
     return this.http.get<PaginatedResponse<Transaction>>('/transactions', params);
   }
+
+  /**
+   * Import transactions from CSV or Excel file
+   * @param file - File object (browser) or file path/buffer (Node.js)
+   * @param options - Import options
+   */
+  async importFile(
+    file: File,
+    options?: {
+      skipDuplicates?: boolean;
+      dryRun?: boolean;
+    }
+  ): Promise<ImportResult> {
+    const formData = new FormData();
+    formData.append('file', file);
+
+    if (options?.skipDuplicates) {
+      formData.append('skipDuplicates', 'true');
+    }
+
+    if (options?.dryRun) {
+      formData.append('dryRun', 'true');
+    }
+
+    return this.http.post<ImportResult>('/transactions/import', formData);
+  }
+
+  /**
+   * Download CSV template for imports
+   */
+  async downloadTemplate(): Promise<string> {
+    const response = await fetch(
+      `${this.http['baseUrl']}/transactions/import/template`,
+      {
+        headers: {
+          Authorization: `Bearer ${this.http['apiKey']}`,
+        },
+      }
+    );
+
+    if (!response.ok) {
+      throw new Error('Failed to download template');
+    }
+
+    return response.text();
+  }
+}
+
+export interface ImportRowResult {
+  rowNumber: number;
+  status: 'success' | 'duplicate' | 'failed';
+  transactionId?: string;
+  customerId?: string;
+  customerMatchMethod?: string;
+  duplicateId?: string;
+  duplicateMatchMethod?: string;
+  error?: string;
+  warnings?: string[];
+}
+
+export interface ImportResult {
+  object: 'import_result';
+  fileName: string;
+  fileSize: number;
+  summary: {
+    totalRows: number;
+    validRows: number;
+    invalidRows: number;
+    succeeded: number;
+    duplicates: number;
+    failed: number;
+  };
+  results: ImportRowResult[];
+  invalidRows: Array<{
+    rowNumber: number;
+    errors: string[];
+    warnings: string[];
+    data: Record<string, unknown>;
+  }>;
+  complianceProcessing: 'running' | 'skipped';
+  dryRun: boolean;
 }

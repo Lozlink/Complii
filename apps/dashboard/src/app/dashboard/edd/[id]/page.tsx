@@ -517,7 +517,7 @@ export default function EDDDetailPage() {
                         {new Date(smr.createdAt).toLocaleDateString()}
                       </p>
                       <Link
-                        href="/dashboard/reports"
+                        href={`/dashboard/reports/smr/${smr.id}`}
                         className="inline-flex items-center text-xs text-primary hover:text-primary/80 mt-2"
                       >
                         View Report
