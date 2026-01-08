@@ -369,7 +369,7 @@ export async function runBatchCompliance(
         const shouldTriggerEDD =
           customer.risk_level === 'high' ||
           customer.is_sanctioned ||
-          (customer.is_pep && riskContext.transactionAmount > config.thresholds.enhancedDdRequired) ||
+          (customer.is_pep && customerTxns.some(tx => tx.amount_Local >= config.thresholds.enhancedDdRequired)) ||
           customerTxns.some(tx => tx.amount_local >= config.thresholds.enhancedDdRequired);
 
         if (shouldTriggerEDD && !customer.requires_edd) {

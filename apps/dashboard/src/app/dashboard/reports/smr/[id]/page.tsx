@@ -110,7 +110,7 @@ export default function SMRDetailPage() {
       // Fetch transactions if linked
       if (smr.transactionIds && smr.transactionIds.length > 0) {
         try {
-          const txPromises = smr.transactionIds.map((txId) =>
+          const txPromises = smr.transactionIds.map((txId:any) =>
             fetch(`/api/proxy/transactions/${txId}`).then((r) => (r.ok ? r.json() : null))
           );
           const txResults = await Promise.all(txPromises);

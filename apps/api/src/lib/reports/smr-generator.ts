@@ -7,6 +7,7 @@ export interface SMRReportData {
   reportId: string;
   submissionDate: string;
   tenantName: string;
+
   suspectedActivity: {
     id: string;
     type: 'money_laundering' | 'terrorism_financing' | 'other';

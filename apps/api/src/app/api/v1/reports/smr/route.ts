@@ -85,7 +85,7 @@ export async function POST(request: NextRequest) {
           .eq('is_enabled', true)
           .maybeSingle();
 
-        if (rule && report.customerId) {
+        if (rule && report.suspectedActivity.customerId) {
           // Generate alert number
           const today = new Date().toISOString().slice(0, 10).replace(/-/g, '');
           const { count } = await supabase
@@ -104,12 +104,12 @@ export async function POST(request: NextRequest) {
               alert_rule_id: rule.id,
               alert_number: alertNumber,
               title: `SMR ${report.reportId} created - requires submission`,
-              description: `Suspicious Matter Report ${report.reportId} has been created and must be submitted to AUSTRAC by ${new Date(report.submissionDeadline).toLocaleDateString()}. Activity type: ${activityType.replace(/_/g, ' ')}.`,
+              description: `Suspicious Matter Report ${report.reportId} has been created and must be submitted to AUSTRAC by ${new Date(report.submissionDeadline || new Date()).toLocaleDateString()}. Activity type: ${activityType.replace(/_/g, ' ')}.`,
               severity: rule.severity || 'critical',
               status: 'open',
               entity_type: 'customer',
-              entity_id: report.customerId,
-              customer_id: report.customerId,
+              entity_id: report.suspectedActivity.customerId,
+              customer_id: report.suspectedActivity.customerId,
               metadata: {
                 smrReportId: report.reportId,
                 activityType,
