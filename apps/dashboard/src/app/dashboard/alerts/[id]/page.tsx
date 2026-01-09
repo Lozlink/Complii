@@ -346,7 +346,7 @@ export default function AlertDetailPage() {
                   href={`/dashboard/${alert.entityType}s/${alert.entityId}`}
                   className="text-primary hover:text-primary/80 flex items-center text-sm"
                 >
-                  {alert.entityId.slice(0, 8)}...
+                  {alert.entityId}
                   <ExternalLink className="w-3 h-3 ml-1" />
                 </Link>
               </div>

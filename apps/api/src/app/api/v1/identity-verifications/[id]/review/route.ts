@@ -177,8 +177,8 @@ export async function POST(
 
       // Dispatch webhooks
       await dispatchKycStatusChanged(supabase, tenant.tenantId, {
-        verificationId: `ver_${verification.id.slice(0, 8)}`,
-        customerId: `cus_${verification.customer_id.slice(0, 8)}`,
+        verificationId: `ver_${verification.id}`,
+        customerId: `cus_${verification.customer_id}`,
         status: newStatus,
         previousStatus: verification.status,
         provider: verification.provider,
@@ -190,9 +190,9 @@ export async function POST(
       if (updatedDocs) {
         for (const doc of updatedDocs) {
           await dispatchDocumentReviewed(supabase, tenant.tenantId, {
-            documentId: `doc_${doc.id.slice(0, 8)}`,
-            customerId: `cus_${verification.customer_id.slice(0, 8)}`,
-            verificationId: `ver_${verification.id.slice(0, 8)}`,
+            documentId: `doc_${doc.id}`,
+            customerId: `cus_${verification.customer_id}`,
+            verificationId: `ver_${verification.id}`,
             decision: body.decision,
             reason: body.reason,
           });

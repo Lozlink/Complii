@@ -135,7 +135,7 @@ export async function POST(request: NextRequest) {
 
       return NextResponse.json({
         object: 'risk_assessment',
-        customerId: `cus_${customer.id.slice(0, 8)}`,
+        customerId: `cus_${customer.id}`,
         riskScore: riskResult.riskScore,
         riskLevel: riskResult.riskLevel,
         factors: riskResult.factors,

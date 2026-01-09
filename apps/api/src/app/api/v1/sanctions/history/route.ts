@@ -48,7 +48,7 @@ export async function GET(request: NextRequest) {
 
       // Transform data to match expected format
       const screenings = (data || []).map((s) => ({
-        id: `scr_${s.id.slice(0, 8)}`,
+        id: `scr_${s.id}`,
         object: 'screening',
         customerId: s.customer_id,
         screenedName: `${s.screened_first_name} ${s.screened_last_name}`.trim(),

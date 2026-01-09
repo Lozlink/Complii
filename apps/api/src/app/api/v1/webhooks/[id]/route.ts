@@ -5,7 +5,7 @@ import { createNotFoundError, createInternalError } from '@/lib/utils/errors';
 
 function formatWebhook(webhook: Record<string, unknown>) {
   return {
-    id: `whk_${(webhook.id as string).slice(0, 8)}`,
+    id: `whk_${(webhook.id as string)}`,
     object: 'webhook_endpoint',
     url: webhook.url,
     events: webhook.events,
@@ -139,7 +139,7 @@ export async function DELETE(
       });
 
       return NextResponse.json({
-        id: `whk_${webhook.id.slice(0, 8)}`,
+        id: `whk_${webhook.id}`,
         object: 'webhook_endpoint',
         deleted: true,
       });

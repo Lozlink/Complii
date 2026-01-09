@@ -51,10 +51,10 @@ export async function GET(request: NextRequest) {
 
       // Transform data to match expected format
       const deliveries = (data || []).map((d) => ({
-        id: `evt_${d.id.slice(0, 8)}`,
+        id: `evt_${d.id}`,
         object: 'webhook_delivery',
         webhookEndpointId: d.webhook_endpoint_id
-          ? `whk_${d.webhook_endpoint_id.slice(0, 8)}`
+          ? `whk_${d.webhook_endpoint_id}`
           : null,
         eventId: d.event_id,
         eventType: d.event_type,

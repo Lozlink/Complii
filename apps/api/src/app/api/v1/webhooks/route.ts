@@ -21,7 +21,7 @@ interface WebhookCreateBody {
 
 function formatWebhook(webhook: Record<string, unknown>, includeSecret = false) {
   return {
-    id: `whk_${(webhook.id as string).slice(0, 8)}`,
+    id: `whk_${(webhook.id as string)}`,
     object: 'webhook_endpoint',
     url: webhook.url,
     events: webhook.events,

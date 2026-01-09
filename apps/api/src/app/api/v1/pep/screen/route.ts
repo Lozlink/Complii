@@ -113,7 +113,7 @@ export async function POST(request: NextRequest) {
       }
 
       const screeningId = screening?.id
-        ? `pep_${screening.id.slice(0, 8)}`
+        ? `pep_${screening.id}`
         : `pep_${Math.random().toString(36).slice(2, 10)}`;
 
       // Log audit event

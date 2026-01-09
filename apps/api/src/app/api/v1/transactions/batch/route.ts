@@ -154,7 +154,7 @@ export async function POST(request: NextRequest) {
             results.push({
               externalId: tx.externalId,
               customerId: tx.customerId,
-              id: `txn_${created.id.slice(0, 8)}`,
+              id: `txn_${created.id}`,
               status: 'created',
               requiresTtr,
               ttrReference,

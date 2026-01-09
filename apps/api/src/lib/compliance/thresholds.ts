@@ -69,6 +69,5 @@ export async function getComplianceRequirements(
 export function generateTTRReference(transactionId: string): string {
   const date = new Date();
   const dateStr = date.toISOString().slice(0, 10).replace(/-/g, '');
-  const shortId = transactionId.slice(0, 8);
-  return `TTR-${dateStr}-${shortId}`;
+  return `TTR-${dateStr}-${transactionId}`;
 }

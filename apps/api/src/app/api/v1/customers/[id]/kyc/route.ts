@@ -172,8 +172,8 @@ export async function POST(
 
       // Dispatch webhook
       dispatchKycVerificationStarted(supabase, tenant.tenantId, {
-        verificationId: `ver_${verification.id.slice(0, 8)}`,
-        customerId: `cus_${customer.id.slice(0, 8)}`,
+        verificationId: `ver_${verification.id}`,
+        customerId: `cus_${customer.id}`,
         provider: body.provider,
         status: sessionResult.status,
       });
@@ -242,7 +242,7 @@ export async function GET(
       if (error || !verification) {
         return NextResponse.json({
           object: 'identity_verification_status',
-          customerId: `cus_${customer.id.slice(0, 8)}`,
+          customerId: `cus_${customer.id}`,
           status: 'none',
           verificationRequired: true,
         });
@@ -290,8 +290,8 @@ export async function GET(
             }
 
             await dispatchKycStatusChanged(supabase, tenant.tenantId, {
-              verificationId: `ver_${verification.id.slice(0, 8)}`,
-              customerId: `cus_${customer.id.slice(0, 8)}`,
+              verificationId: `ver_${verification.id}`,
+              customerId: `cus_${customer.id}`,
               status: result.status,
               provider: 'stripe_identity'
             });

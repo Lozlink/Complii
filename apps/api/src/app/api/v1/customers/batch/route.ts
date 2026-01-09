@@ -83,7 +83,7 @@ export async function POST(request: NextRequest) {
               results.push({
                 externalId: customer.externalId,
                 email: customer.email,
-                id: `cus_${existing.id.slice(0, 8)}`,
+                id: `cus_${existing.id}`,
                 status: 'exists',
               });
               succeeded++;
@@ -121,7 +121,7 @@ export async function POST(request: NextRequest) {
             results.push({
               externalId: customer.externalId,
               email: customer.email,
-              id: `cus_${created.id.slice(0, 8)}`,
+              id: `cus_${created.id}`,
               status: 'created',
             });
             succeeded++;

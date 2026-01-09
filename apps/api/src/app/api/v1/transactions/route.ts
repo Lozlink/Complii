@@ -26,9 +26,9 @@ interface TransactionCreateBody {
 
 function formatTransaction(tx: Record<string, unknown>) {
   return {
-    id: `txn_${(tx.id as string).slice(0, 8)}`,
+    id: `txn_${(tx.id as string)}`,
     object: 'transaction',
-    customerId: `cus_${(tx.customer_id as string).slice(0, 8)}`,
+    customerId: `cus_${(tx.customer_id as string)}`,
     externalId: tx.external_id,
     amount: tx.amount,
     currency: tx.currency,
@@ -45,6 +45,9 @@ function formatTransaction(tx: Record<string, unknown>) {
     reviewStatus: tx.review_status,
     metadata: tx.metadata,
     createdAt: tx.created_at,
+    ttrSubmissionDeadline: tx.ttr_submission_deadline,
+    ttrSubmissionStatus: tx.ttr_submission_status,
+
   };
 }
 

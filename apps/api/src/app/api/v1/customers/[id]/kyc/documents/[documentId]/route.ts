@@ -7,9 +7,9 @@ function formatDocument(doc: Record<string, unknown>) {
   return {
     id: `doc_${(doc.id as string)}`,
     object: 'customer_document',
-    customerId: `cus_${(doc.customer_id as string).slice(0, 8)}`,
+    customerId: `cus_${(doc.customer_id as string)}`,
     verificationId: doc.verification_id
-      ? `ver_${(doc.verification_id as string).slice(0, 8)}`
+      ? `ver_${(doc.verification_id as string)}`
       : null,
     documentType: doc.document_type,
     fileName: doc.file_name,
@@ -180,7 +180,7 @@ export async function DELETE(
       });
 
       return NextResponse.json({
-        id: `doc_${document.id.slice(0, 8)}`,
+        id: `doc_${document.id}`,
         object: 'customer_document',
         deleted: true,
       });
