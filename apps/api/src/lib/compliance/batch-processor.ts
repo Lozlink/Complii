@@ -218,6 +218,7 @@ export async function runBatchCompliance(
             customerAgeDays: customerAge,
             recentTransactionCount: recentTxCount || 0,
             hasUnusualPattern: false, // TODO: implement pattern detection
+            customerRequiresEDD: customer.requires_edd || false,
             customer: {
               isPep: customer.is_pep || false,
               isSanctioned: customer.is_sanctioned || false,

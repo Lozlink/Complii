@@ -5,6 +5,7 @@ import { getTenantConfig } from '@/lib/config/regions';
 import { getComplianceRequirements, generateTTRReference } from '@/lib/compliance/thresholds';
 import { detectStructuring, getStructuringConfigFromRegion } from '@/lib/compliance/structuring-detection';
 import { calculateRiskScore, RiskContext } from '@/lib/compliance/risk-scoring';
+import { createAlert, AlertGenerators } from '@/lib/alerts/alert-service';
 import { createValidationError, createInternalError, createNotFoundError } from '@/lib/utils/errors';
 import {
   dispatchTransactionCreated,
@@ -26,9 +27,9 @@ interface TransactionCreateBody {
 
 function formatTransaction(tx: Record<string, unknown>) {
   return {
-    id: `txn_${(tx.id as string).slice(0, 8)}`,
+    id: `txn_${(tx.id as string)}`,
     object: 'transaction',
-    customerId: `cus_${(tx.customer_id as string).slice(0, 8)}`,
+    customerId: `cus_${(tx.customer_id as string)}`,
     externalId: tx.external_id,
     amount: tx.amount,
     currency: tx.currency,
@@ -41,10 +42,14 @@ function formatTransaction(tx: Record<string, unknown>) {
     ttrReference: tx.ttr_reference,
     riskScore: tx.risk_score,
     riskLevel: tx.risk_level,
+    riskFactors: tx.risk_factors,
     flaggedForReview: tx.flagged_for_review,
     reviewStatus: tx.review_status,
     metadata: tx.metadata,
     createdAt: tx.created_at,
+    ttrSubmissionDeadline: tx.ttr_submission_deadline,
+    ttrSubmissionStatus: tx.ttr_submission_status,
+
   };
 }
 
@@ -119,6 +124,9 @@ export async function POST(request: NextRequest) {
         .eq('customer_id', customer.id)
         .gte('created_at', weekAgo);
 
+      // Check if customer is under EDD investigation
+      const customerRequiresEDD = customer.requires_edd || false;
+
       // Calculate risk score
       const riskContext: RiskContext = {
         transactionAmount: body.amount,
@@ -126,6 +134,7 @@ export async function POST(request: NextRequest) {
         customerAgeDays,
         recentTransactionCount: recentTxCount || 0,
         hasUnusualPattern: structuringResult.isStructuring,
+        customerRequiresEDD,
         customer: {
           isPep: customer.is_pep,
           isSanctioned: customer.is_sanctioned,
@@ -154,6 +163,15 @@ export async function POST(request: NextRequest) {
         }
       }
 
+      // Flag transaction if:
+      // 1. High risk OR
+      // 2. Structuring detected OR
+      // 3. Customer is under EDD investigation
+      const flaggedForReview =
+        riskResult.riskLevel === 'high' ||
+        structuringResult.isStructuring ||
+        customerRequiresEDD;
+
       // Create transaction
       const { data: transaction, error: txError } = await supabase
         .from('transactions')
@@ -170,7 +188,8 @@ export async function POST(request: NextRequest) {
           requires_ttr: requiresTtr,
           risk_score: riskResult.riskScore,
           risk_level: riskResult.riskLevel,
-          flagged_for_review: riskResult.riskLevel === 'high' || structuringResult.isStructuring,
+          risk_factors: riskResult.factors,
+          flagged_for_review: flaggedForReview,
           metadata: body.metadata || {},
         })
         .select()
@@ -211,7 +230,92 @@ export async function POST(request: NextRequest) {
         api_key_prefix: tenant.apiKeyPrefix,
       });
 
-      // Dispatch webhooks (fire and forget)
+      // If flagged due to EDD only, add audit trail
+      if (customerRequiresEDD && !structuringResult.isStructuring && riskResult.riskLevel !== 'high') {
+        await supabase.from('audit_logs').insert({
+          tenant_id: tenant.tenantId,
+          action_type: 'flagged_for_edd',
+          entity_type: 'transaction',
+          entity_id: transaction.id,
+          description: 'Transaction auto-flagged due to customer EDD investigation',
+          metadata: {
+            customer_requires_edd: true,
+            transaction_amount: body.amount,
+          },
+          api_key_prefix: tenant.apiKeyPrefix,
+        });
+      }
+
+      // ===== Synchronous Alert Creation =====
+      try {
+        // 1. Structuring Detected Alert
+        if (structuringResult.isStructuring) {
+          await createAlert(
+            supabase,
+            AlertGenerators.structuringDetected(
+              tenant.tenantId,
+              customer.id,
+              structuringResult.suspiciousTransactionCount,
+              structuringResult.totalAmount,
+              structuringResult.indicators
+            )
+          );
+        }
+
+        // 2. High Risk Transaction Alert
+        if (riskResult.riskLevel === 'high') {
+          await createAlert(
+            supabase,
+            AlertGenerators.highRiskScore(
+              tenant.tenantId,
+              'transaction',
+              transaction.id,
+              customer.id,
+              riskResult.riskScore,
+              riskResult.riskLevel,
+              riskResult.factors
+            )
+          );
+        }
+
+        // 3. TTR Threshold Alert
+        if (requiresTtr) {
+          await createAlert(
+            supabase,
+            AlertGenerators.ttrThreshold(
+              tenant.tenantId,
+              transaction.id,
+              customer.id,
+              body.amount,
+              body.currency || config.currency
+            )
+          );
+        }
+
+        // 4. Customer EDD Alert (if transaction flagged due to EDD)
+        if (customerRequiresEDD && !structuringResult.isStructuring && riskResult.riskLevel !== 'high') {
+          await createAlert(supabase, {
+            tenantId: tenant.tenantId,
+            ruleCode: 'CUSTOMER_EDD_TRANSACTION',
+            entityType: 'transaction',
+            entityId: transaction.id,
+            customerId: customer.id,
+            severity: 'medium',
+            title: 'Transaction from Customer Under EDD',
+            description: `Customer is under Enhanced Due Diligence investigation. All transactions flagged for review during investigation period.`,
+            triggerData: {
+              customer_requires_edd: true,
+              transaction_amount: body.amount,
+              customer_id: customer.id,
+            },
+          });
+        }
+      } catch (alertError) {
+        // Log alert creation failures but don't block transaction creation
+        console.error('Failed to create alerts:', alertError);
+      }
+
+      // ===== Dispatch Webhooks (for external systems) =====
       const formattedTx = formatTransaction(transaction);
       dispatchTransactionCreated(supabase, tenant.tenantId, formattedTx);
 

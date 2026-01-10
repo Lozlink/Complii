@@ -39,6 +39,18 @@ export async function GET(request: NextRequest) {
         .eq('tenant_id', tenant.tenantId)
         .eq('is_pep', true);
 
+      const { count: businessCustomers } = await supabase
+        .from('customers')
+        .select('*', { count: 'exact', head: true })
+        .eq('tenant_id', tenant.tenantId)
+        .eq('customer_type', 'business');
+
+      const { count: pendingCustomers } = await supabase
+        .from('customers')
+        .select('*', { count: 'exact', head: true })
+        .eq('tenant_id', tenant.tenantId)
+        .in('verification_status', ['pending', 'submitted', 'in_review']);
+
       // Get transaction stats
       const { count: totalTransactions } = await supabase
         .from('transactions')
@@ -107,6 +119,53 @@ export async function GET(request: NextRequest) {
         if (level in riskCounts) riskCounts[level]++;
       });
 
+      // Get alert stats
+      const { count: openAlerts } = await supabase
+        .from('alerts')
+        .select('*', { count: 'exact', head: true })
+        .eq('tenant_id', tenant.tenantId)
+        .eq('status', 'open');
+
+      const { count: criticalAlerts } = await supabase
+        .from('alerts')
+        .select('*', { count: 'exact', head: true })
+        .eq('tenant_id', tenant.tenantId)
+        .eq('status', 'open')
+        .eq('severity', 'critical');
+
+      // Get case stats
+      const { count: openCases } = await supabase
+        .from('cases')
+        .select('*', { count: 'exact', head: true })
+        .eq('tenant_id', tenant.tenantId)
+        .eq('status', 'open');
+
+      const { count: pendingCases } = await supabase
+        .from('cases')
+        .select('*', { count: 'exact', head: true })
+        .eq('tenant_id', tenant.tenantId)
+        .eq('status', 'pending');
+
+      // Get OCDD stats
+      const now = new Date();
+      const oneWeekFromNow = new Date(now);
+      oneWeekFromNow.setDate(oneWeekFromNow.getDate() + 7);
+
+      const { count: ocddDueThisWeek } = await supabase
+        .from('ocdd_schedules')
+        .select('*', { count: 'exact', head: true })
+        .eq('tenant_id', tenant.tenantId)
+        .eq('status', 'active')
+        .gte('next_scheduled_at', now.toISOString())
+        .lte('next_scheduled_at', oneWeekFromNow.toISOString());
+
+      const { count: ocddOverdue } = await supabase
+        .from('ocdd_schedules')
+        .select('*', { count: 'exact', head: true })
+        .eq('tenant_id', tenant.tenantId)
+        .eq('status', 'active')
+        .lt('next_scheduled_at', now.toISOString());
+
       return NextResponse.json({
         object: 'analytics_overview',
         period: {
@@ -116,11 +175,13 @@ export async function GET(request: NextRequest) {
         customers: {
           total: totalCustomers || 0,
           verified: verifiedCustomers || 0,
+          pending: pendingCustomers || 0,
           sanctioned: sanctionedCustomers || 0,
           pep: pepCustomers || 0,
+          business: businessCustomers || 0,
           verificationRate:
             (totalCustomers || 0) > 0
-              ? ((verifiedCustomers || 0) / (totalCustomers || 0)) * 100
+              ? Math.round(((verifiedCustomers || 0) / (totalCustomers || 0)) * 100)
               : 0,
         },
         transactions: {
@@ -140,6 +201,18 @@ export async function GET(request: NextRequest) {
               : 0,
         },
         riskDistribution: riskCounts,
+        alerts: {
+          open: openAlerts || 0,
+          critical: criticalAlerts || 0,
+        },
+        cases: {
+          open: openCases || 0,
+          pending: pendingCases || 0,
+        },
+        ocdd: {
+          dueThisWeek: ocddDueThisWeek || 0,
+          overdue: ocddOverdue || 0,
+        },
       });
     } catch (error) {
       console.error('Analytics overview error:', error);

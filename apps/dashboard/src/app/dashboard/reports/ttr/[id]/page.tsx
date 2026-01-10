@@ -196,7 +196,7 @@ export default function TTRDetailPage() {
             Back to Reports
           </Link>
           <h1 className="text-3xl font-bold text-gray-900">
-            {transaction.ttrReference || `TTR-${transaction.id.slice(0, 8)}`}
+            {transaction.ttrReference || `TTR-${transaction.id}`}
           </h1>
           <p className="mt-1 text-gray-600">Threshold Transaction Report</p>
         </div>

@@ -103,7 +103,7 @@ export const REGIONAL_CONFIGS: Record<string, RegionalConfig> = {
       enhancedDdRequired: 50000,
       structuringWindow: 7,
       structuringMinTxCount: 3,
-      structuringAmountRange: { min: 4000, max: 5000 },
+      structuringAmountRange: { min: 7000, max: 9999 },
       internationalTransfer: 0, // All IFTIs reported
     },
     deadlines: {
@@ -160,7 +160,7 @@ export const REGIONAL_CONFIGS: Record<string, RegionalConfig> = {
       enhancedDdRequired: 50000,
       structuringWindow: 7,
       structuringMinTxCount: 3,
-      structuringAmountRange: { min: 4000, max: 5000 },
+      structuringAmountRange: { min: 7000, max: 9999 },
       internationalTransfer: 1000,
     },
     deadlines: {

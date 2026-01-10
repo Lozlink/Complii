@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import Link from 'next/link';
-import { FileText, Download, Calendar, AlertCircle, RefreshCw, Send } from 'lucide-react';
+import { FileText, Download, Calendar, AlertCircle, RefreshCw, Send, ChevronRight } from 'lucide-react';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 
 interface Report {
@@ -107,7 +107,7 @@ export default function ReportsPage() {
 
   const fetchFlaggedTransactions = useCallback(async () => {
     try {
-      const response = await fetch('/api/proxy/transactions?status=flagged&limit=100');
+      const response = await fetch('/api/proxy/transactions?flagged_for_review=true&limit=100');
       if (!response.ok) throw new Error('API unavailable');
       const data = await response.json();
       setFlaggedTransactions(data.data || []);
@@ -332,19 +332,40 @@ export default function ReportsPage() {
       {/* TTR Tab */}
       {activeTab === 'ttr' && (
         <>
+          {/* Quick Action: Manage TTRs */}
+          <div className="p-4 bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-200 rounded-lg">
+            <div className="flex items-center justify-between">
+              <div className="flex items-start">
+                <FileText className="w-5 h-5 text-blue-600 mt-0.5 mr-3 flex-shrink-0" />
+                <div>
+                  <h4 className="text-sm font-medium text-blue-900">Manage Individual TTRs</h4>
+                  <p className="text-sm text-blue-800 mt-1">
+                    View, manage, and submit individual TTR reports that require AUSTRAC submission
+                  </p>
+                </div>
+              </div>
+              <Link
+                href="/dashboard/reports/ttr"
+                className="flex items-center px-4 py-2 bg-primary text-white rounded-lg hover:bg-primary/90 transition-colors whitespace-nowrap ml-4"
+              >
+                View All TTRs
+                <ChevronRight className="w-4 h-4 ml-2" />
+              </Link>
+            </div>
+          </div>
+
           <Card>
             <CardHeader>
-              <CardTitle>Generate Threshold Transaction Report (TTR)</CardTitle>
+              <CardTitle>Generate Batch TTR Export</CardTitle>
             </CardHeader>
             <CardContent>
               <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-6">
                 <div className="flex items-start">
                   <AlertCircle className="w-5 h-5 text-blue-600 mt-0.5 mr-3 flex-shrink-0" />
                   <div>
-                    <h4 className="text-sm font-medium text-blue-900">AUSTRAC TTR Requirements</h4>
+                    <h4 className="text-sm font-medium text-blue-900">Batch Export for Analysis</h4>
                     <p className="text-sm text-blue-800 mt-1">
-                      Threshold Transaction Reports must be submitted to AUSTRAC for all transactions
-                      of AUD $10,000 or more within 10 business days.
+                      Generate bulk exports of TTR transactions for the selected date range. For individual TTR submission to AUSTRAC, use the "View All TTRs" button above.
                     </p>
                   </div>
                 </div>

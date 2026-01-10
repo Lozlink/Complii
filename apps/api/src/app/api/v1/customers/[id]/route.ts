@@ -155,7 +155,7 @@ export async function DELETE(
       });
 
       return NextResponse.json({
-        id: `cus_${customer.id.slice(0, 8)}`,
+        id: `cus_${customer.id}`,
         object: 'customer',
         deleted: true,
       });

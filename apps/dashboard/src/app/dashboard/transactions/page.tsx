@@ -5,6 +5,12 @@ import Link from 'next/link';
 import { Search, Download, AlertTriangle, CheckCircle, Clock, RefreshCw, AlertCircle } from 'lucide-react';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 
+interface RiskFactor {
+  factor: string;
+  score: number;
+  reason: string;
+}
+
 interface Transaction {
   id: string;
   customerId: string;
@@ -15,6 +21,7 @@ interface Transaction {
   transactionType: string;
   riskScore: number;
   riskLevel: 'low' | 'medium' | 'high';
+  riskFactors?: RiskFactor[];
   flaggedForReview: boolean;
   requiresTtr: boolean;
   createdAt: string;
@@ -25,7 +32,6 @@ export default function TransactionsPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
-  const [filterStatus, setFilterStatus] = useState<string>('all');
   const [filterFlag, setFilterFlag] = useState<string>('all');
 
   const fetchTransactions = useCallback(async () => {
@@ -233,9 +239,11 @@ export default function TransactionsPage() {
                 </thead>
                 <tbody className="bg-white divide-y divide-gray-200">
                   {filteredTransactions.map((txn) => (
-                    <tr key={txn.id} className="hover:bg-gray-50">
+                    <tr key={txn.id} className="hover:bg-gray-50 cursor-pointer" onClick={() => window.location.href = `/dashboard/transactions/${txn.id}`}>
                       <td className="px-6 py-4 whitespace-nowrap">
-                        <div className="text-sm font-medium text-gray-900">{txn.id}</div>
+                        <Link href={`/dashboard/transactions/${txn.id}`} className="text-sm font-medium text-primary hover:text-primary/80">
+                          {txn.id}
+                        </Link>
                         <div className="text-sm text-gray-500">{txn.customerName || txn.customerId}</div>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">

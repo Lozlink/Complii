@@ -122,7 +122,7 @@ export async function generateIndividualTTR(
   const deadline = calculateTTRDeadline(transactionDate, config);
 
   const reportData: TTRReportData = {
-    reportReference: transaction.ttr_reference || `TTR-${transaction.id.slice(0, 8)}`,
+    reportReference: transaction.ttr_reference || `TTR-${transaction.id}`,
     reportType: 'TTR',
     reportVersion: '1.0',
 
@@ -476,7 +476,7 @@ export async function generateTTRBatchExport(
 
     return {
       id: tx.id,
-      reference: tx.ttr_reference || tx.id.slice(0, 8),
+      reference: tx.ttr_reference || tx.id,
       customerName,
       amount: parseFloat(tx.amount),
       currency: tx.currency,

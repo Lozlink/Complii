@@ -119,8 +119,8 @@ export async function triggerPostVerificationActions(
     // Dispatch webhook if match found
     if (screeningResult.isMatch) {
       await dispatchScreeningMatch(supabase, tenantId, {
-        customerId: `cus_${customerId.slice(0, 8)}`,
-        screeningId: screening?.id ? `scr_${screening.id.slice(0, 8)}` : undefined,
+        customerId: `cus_${customerId}`,
+        screeningId: screening?.id ? `scr_${screening.id}` : undefined,
         isMatch: screeningResult.isMatch,
         matchScore: screeningResult.matchScore,
         matches: screeningResult.matches,

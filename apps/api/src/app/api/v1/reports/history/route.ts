@@ -37,7 +37,7 @@ export async function GET(request: NextRequest) {
 
       // Transform data to match expected format
       const reports = (data || []).map((r) => ({
-          id: `rpt_${r.id.slice(0, 8)}`,
+          id: `rpt_${r.id}`,
           object: 'report',
           reportNumber: r.report_number,
           reportType: r.report_type,

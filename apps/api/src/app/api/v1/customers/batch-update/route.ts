@@ -60,7 +60,7 @@ export async function POST(request: NextRequest) {
               error: error?.message || 'Customer not found',
             });
           } else {
-            results.updated.push(`cus_${data.id.slice(0, 8)}`);
+            results.updated.push(`cus_${data.id}`);
           }
         } catch (error) {
           results.failed.push({

@@ -6,6 +6,7 @@ export interface RiskContext {
   customerAgeDays: number;
   recentTransactionCount: number;
   hasUnusualPattern: boolean;
+  customerRequiresEDD?: boolean;
   customer: {
     isPep: boolean;
     isSanctioned: boolean;
@@ -108,6 +109,13 @@ export const DEFAULT_RISK_FACTORS: RiskFactor[] = [
     condition: (ctx) => ctx.customer.verificationStatus === 'unverified',
     score: 10,
     description: 'Customer identity not verified',
+  },
+  {
+    name: 'customer_under_edd',
+    weight: 1,
+    condition: (ctx) => ctx.customerRequiresEDD === true,
+    score: 40,
+    description: 'Customer is currently under Enhanced Due Diligence investigation',
   },
 ];
 

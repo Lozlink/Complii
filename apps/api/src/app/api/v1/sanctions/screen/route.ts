@@ -90,7 +90,7 @@ export async function POST(request: NextRequest) {
       });
 
       const response = {
-        id: screening?.id ? `scr_${screening.id.slice(0, 8)}` : undefined,
+        id: screening?.id ? `scr_${screening.id}` : undefined,
         object: 'screening',
         isMatch: result.isMatch,
         status: result.status,

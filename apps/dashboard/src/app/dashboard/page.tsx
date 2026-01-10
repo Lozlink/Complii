@@ -91,40 +91,25 @@ export default function DashboardPage() {
     setLoading(true);
     setError(null);
     try {
-      // Fetch analytics from multiple endpoints in parallel
-      const [customersRes, transactionsRes, alertsRes, configRes] = await Promise.all([
-        fetch('/api/proxy/customers?limit=1'),
-        fetch('/api/proxy/transactions?limit=1'),
+      // Fetch analytics and alerts in parallel
+      const [analyticsRes, alertsRes, configRes] = await Promise.all([
+        fetch('/api/proxy/analytics/overview'),
         fetch('/api/proxy/alerts?status=open&limit=10'),
         fetch('/api/proxy/config/regions'),
       ]);
 
-      // Parse customer analytics
-      if (customersRes.ok) {
-        const customersData = await customersRes.json();
-        if (customersData.totalCount !== undefined || customersData.pagination?.total !== undefined) {
-          setAnalytics((prev) => ({
-            ...prev,
-            customers: {
-              ...prev.customers,
-              total: customersData.totalCount ?? customersData.pagination?.total ?? 0,
-            },
-          }));
-        }
-      }
-
-      // Parse transaction analytics
-      if (transactionsRes.ok) {
-        const txData = await transactionsRes.json();
-        if (txData.totalCount !== undefined || txData.pagination?.total !== undefined) {
-          setAnalytics((prev) => ({
-            ...prev,
-            transactions: {
-              ...prev.transactions,
-              total: txData.totalCount ?? txData.pagination?.total ?? 0,
-            },
-          }));
-        }
+      // Parse analytics
+      if (analyticsRes.ok) {
+        const analyticsData = await analyticsRes.json();
+        setAnalytics({
+          customers: analyticsData.customers || emptyAnalytics.customers,
+          transactions: analyticsData.transactions || emptyAnalytics.transactions,
+          screenings: analyticsData.screenings || emptyAnalytics.screenings,
+          riskDistribution: analyticsData.riskDistribution || emptyAnalytics.riskDistribution,
+          alerts: analyticsData.alerts || emptyAnalytics.alerts,
+          cases: analyticsData.cases || emptyAnalytics.cases,
+          ocdd: analyticsData.ocdd || emptyAnalytics.ocdd,
+        });
       }
 
       // Parse alerts
