@@ -99,7 +99,8 @@ interface Transaction {
   amount: number;
   currency: string;
   direction: string;
-  status: string;
+  flaggedForReview?: boolean;
+  requiresTtr?: boolean;
   createdAt: string;
 }
 
@@ -174,7 +175,7 @@ export default function CustomerDetailPage() {
         fetch(`/api/proxy/customers/${customerId}/kyc/documents?limit=20`).catch(() => null),
         fetch(`/api/proxy/sanctions/history?customer_id=${customerId}&status=potential_match&limit=5`).catch(() => null),
         fetch(`/api/proxy/pep/history?customer_id=${customerId}&status=potential_match&limit=5`).catch(() => null),
-        fetch(`/api/proxy/transactions?customer_id=${customerId}&status=flagged&limit=10`).catch(() => null),
+        fetch(`/api/proxy/transactions?customer_id=${customerId}&flagged_for_review=true&limit=10`).catch(() => null),
         fetch(`/api/proxy/reports/smr?limit=10`).catch(() => null),
         fetch(`/api/proxy/edd?customerId=${customerId}&limit=10`).catch(() => null),
       ]);
@@ -1317,7 +1318,12 @@ export default function CustomerDetailPage() {
                     <p className="text-sm font-semibold text-gray-900">
                       {txn.currency} ${txn.amount.toLocaleString()}
                     </p>
-                    <p className="text-xs text-green-600 capitalize">{txn.status}</p>
+                    {txn.flaggedForReview && (
+                      <p className="text-xs text-red-600 font-medium">Flagged</p>
+                    )}
+                    {txn.requiresTtr && !txn.flaggedForReview && (
+                      <p className="text-xs text-orange-600 font-medium">TTR Required</p>
+                    )}
                   </div>
                 </div>
               ))}

@@ -84,6 +84,7 @@ export async function POST(request: NextRequest) {
         customerAgeDays,
         recentTransactionCount: recentTxCount || 0,
         hasUnusualPattern: structuringDetected,
+        customerRequiresEDD: customer.requires_edd || false,
         customer: {
           isPep: customer.is_pep,
           isSanctioned: customer.is_sanctioned,
